@@ -1,0 +1,614 @@
+#! /bin/sh
+
+PATH="/home/gentoo/various/bin:/home/bin:${PATH}"
+
+eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=''
+if [ -n "${eix_functions}" ]
+then	. "${eix_functions}"
+else
+ReadVar() {
+	read_var="`portageq envvar ${2}`" || read_var=''
+	eval "${1}=\"\${read_var}\""
+	[ -n "${read_var}" ]
+}
+fi
+
+set -f
+
+have_set_title=false
+Title() {
+	${notitle} || printf '\033]0;%s: %s\007' "${0##*/}" "${*}"
+	have_set_title=:
+}
+
+Exit() {
+	a="${1:-$?}"
+	${have_set_title} && if [ ${a} -eq 0 ]
+	then Title "finish"
+	else Title "failure"
+	fi
+	exit ${a}
+}
+
+
+Warning() {
+	printf '%s: warning: %s\n' "${0##*/}" "${*}" >&2
+}
+
+Fatal() {
+	printf '%s: %s\n' "${0##*/}" "${*}" >&2
+	Exit 2
+}
+
+Info() {
+	printf '### %s\n' "${*}"
+}
+
+Push() {
+	v_="${1}"
+	shift
+	eval "for i_
+	do	[ -z \"\${${v_}}\" ] && ${v_}=\\' || ${v_}=\"\${${v_}} '\"
+		j_=\"\${i_}\"
+		while {
+			f_=\"\${j_%%\\'*}\"
+			[ \"\${f_}\" != \"\${j_}\" ]
+		}
+		do	${v_}=\"\${${v_}}\${f_}'\\\\''\"
+			j_=\"\${j_#*\\'}\"
+		done
+		${v_}=\"\${${v_}}\${j_}'\"
+	done"
+}
+
+LC_COLLATE=C
+Quote() {
+	printf '# %s' "${1}"
+	shift
+	for q
+	do	case "${q}" in
+		*[!-+=/:.0-9_a-zA-Z]*)
+			q_=''
+			Push q_ "${q}"
+			printf ' %s' "${q_}";;
+		*)	printf ' %s' "${q}";;
+		esac
+	done
+	echo
+}
+
+QuoteExec() {
+	Quote "${@}"
+	"${@}"
+}
+
+MyDiff() {
+	Title 'diff'
+	diffa="${KBUILD_OUTPUT}/.config.old"
+	diffb="${KBUILD_OUTPUT}/.config"
+	test -f "${diffa}" && test -f "${diffb}" || return 0
+	diffd=diff
+	command -v colordiff >/dev/null 2>&1 && diffd=colordiff
+	QuoteExec "${diffd}" -- "${diffa}" "${diffb}"
+}
+
+Usage() {
+	printf '%s\n' "Usage: ${0##*/} [options]
+(Version 1.10)
+This script will compile and install the kernel and kernelmodules
+(asking at each step what should be done).
+The following options are available:
+
+  -f (force) always assume 'yes'. You might want to combine this with:
+  -p       use oldconfig
+
+  -n       use nconfig    (resp. do not ask for other *config)
+  -x       use xconfig    (resp. do not ask for other *config)
+  -m       use menuconfig (resp. do not ask for other *config)
+  -g       use gconfig    (resp. do not ask for other *config)
+  -N       use no config  (resp. do not ask for *config)
+
+  -u USER  compile with permissions of USER (default for USER is portage).
+
+  -Y       transfer X data using sudox (default with USER=portage and -x|-g)
+  -X       do not transfer X data
+  -t       do not modify title
+
+  -c       Use ccache. The environment variables CCACHE_DIR and CCACHE_SIZE
+           are interpreted as by portage.
+           If USER=portage the default depends on FEATURES, and the default
+           of all these three variables is read from portage.
+  -C       Do not use ccache (default if USER is not portage).
+
+  -a PARA  Add PARA to the make parameters. Typical example:
+           -a 'CONFIG_DEBUG_SECTION_MISMATCH=y'
+           This can be used successively.
+
+  -o PATH  Use PATH as prefix for installation, e.g. install modules into
+           PATH/lib/modules/...
+           If this option is used, also the installation is done with the
+           permissions of USER.
+
+  -O PATH  As -o PATH but use root permissions for the installation."
+	Exit ${1:-1}
+}
+
+remoteopt=''
+PushOpt() {
+	Push remoteopt "${@}"
+}
+
+makeopts=''
+PushMake() {
+	Push makeopts "${@}"
+}
+
+forceflag=false
+oldconfig=false
+configtype=''
+useccache=''
+xtransfer=''
+remoteuser=''
+prefixdir=''
+rootinstalls=:
+notitle=false
+OPTIND=1
+while getopts 'fpnmgxNtcCxXa:u:o:O:?hH' opt
+do	PushOpt "-${opt}"
+	case "${opt}" in
+	f)	forceflag=:;;
+	p)	oldconfig=:;;
+	n)	configtype='nconfig';;
+	x)	configtype='xconfig';;
+	m)	configtype='menuconfig';;
+	g)	configtype='gconfig';;
+	N)	configtype='none';;
+	t)	notitle=:;;
+	c)	useccache=:;;
+	C)	useccache=false;;
+	Y)	xtransfer=:;;
+	X)	xtransfer=false;;
+	a)	PushOpt "${OPTARG}"; PushMake "${OPTARG}";;
+	u)	PushOpt "${OPTARG}"; remoteuser="${OPTARG}";;
+	o)	PushOpt "${OPTARG}"; prefixdir="${OPTARG}"; rootinstalls=false;;
+	O)	PushOpt "${OPTARG}"; prefixdir="${OPTARG}";;
+	*)	Usage 0;;
+	esac
+done
+shift $(( ${OPTIND} - 1 ))
+
+if [ -z "${remoteuser}" ]
+then	remoteuser='portage'
+	PushOpt '-u' "${remoteuser}"
+fi
+
+if [ -z "${xtransfer}" ] && case "${configtype}" in
+	x*|g*)	:;;
+	*)	false;;
+	esac
+then	[ "${remoteuser}" = 'portage' ] && xtransfer=: || xtransfer=false
+fi
+
+: ${KERNEL_DIR:=/usr/src/linux}
+: ${KBUILD_OUTPUT:="${KERNEL_DIR}"}
+
+test -d "${KERNEL_DIR}" || \
+	Fatal "directory KERNEL_DIR=${KERNEL#DIR} does not exist"
+
+cd -- "${KERNEL_DIR}" >/dev/null || Fatal "cd ${KERNEL_DIR} failed"
+
+if [ "${KERNEL_DIR}" = "${KBUILD_OUTPUT}" ] || \
+	[ "${PWD}" = "${KBUILD_OUTPUT}" ]
+then	Fatal "This script should only be used if KBUILD_OUTPUT is set in the
+environment and is a different directory than KERNEL_DIR, i.e. it must *not* be
+	${KERNEL_DIR}
+Note that setting KBUILD_OUTPUT should be done in the environment of root or
+alternatively in /etc/make.conf (or /etc/portage/make.conf) so that portage
+will honour it later when emerging kernel-related ebuilds."
+fi
+
+BackSpaceArg() {
+	[ -z "${1}" ] && return
+	bckspc="${1}"
+	bckspt=''
+	while [ -n "${bckspc}" ]
+	do	bckspt="${bckspt}"'\b \b'
+		bckspc="${bckspc%?}"
+	done
+	printf "${bckspt}"
+}
+
+quitstatus=0
+Ask() {
+	if ${forceflag}
+	then	printf '%s.\n' "${*}"
+		return 0
+	fi
+	Title '???'
+	askt='(Yes/No/Rest/Quit) '
+	printf '%s? %s' "${*}" "${askt}"
+	while :
+	do	oldtty="`stty -g`"
+		stty -icanon -echo
+		askkey="`dd count=1 bs=1 2>/dev/null`"
+		stty ${oldtty}
+		case "${askkey}" in
+		y*|Y*)	BackSpaceArg "${askt}"
+			echo "Yes"
+			return 0
+		;;
+		n*|N*)	BackSpaceArg "${askt}"
+			echo "No"
+			return 1
+		;;
+		r*|R*)	BackSpaceArg "${askt}"
+			echo "Rest"
+			forceflag=:
+			return 0
+		;;
+		q*|Q*)	BackSpaceArg "${askt}"
+			echo "Quit"
+			Exit ${quitstatus}
+		;;
+		esac
+	done
+
+}
+
+read_features=:
+FeaturesHave() {
+	if ${read_features}
+	then	ReadVar FEATURES FEATURES
+		read_features=false
+	fi
+	feature_have=1
+	for feature in ${FEATURES}
+	do	if [ "${feature}" = "${1}" ]
+		then	feature_have=0
+		elif [ "${feature}" = "-${1}" ]
+		then	feature_have=1
+		fi
+	done
+	return ${feature_have}
+}
+
+# The preparation parts which have to be done as root:
+
+magicquit=66
+magicforce=65
+PrepAndRemote() {
+	remoteUID=`id -u "${remoteuser}"` || Fatal "id -u ${remoteuser} failed"
+	remoteGID=`id -g "${remoteuser}"` || Fatal "id -g ${remoteuser} failed"
+	Info "Compiling scheduled for ${remoteuser} (${remoteUID}:${remoteGID})."
+	if ${forceflag}
+	then	passforce=false
+	else	passforce=:
+		Info ''
+		Info 'You will get asked interactively at each step.'
+		Info \
+'To avoid this, use option -f or reply on a question with r(est).'
+		Info ''
+	fi
+	clr=:
+	if test -d "${KBUILD_OUTPUT}"
+	then	if Ask "Clean ${KBUILD_OUTPUT} (only partially: keep .config*)"
+		then	(
+				cd -- "${KBUILD_OUTPUT}" >/dev/null \
+					|| Fatal "cd ${KBUILD_OUTPUT} failed"
+				set +f
+				for i in .* *
+				do	case "${i}" in
+					.|..|.config*)	continue;;
+					esac
+					test -r "${i}" || test -h "${i}" || continue
+					rm -rf -- "${i}" || Fatal "cannot remove ${KBUILD_OUTPUT}/${i}"
+				done
+			) || Fatal "cleaning ${KBUILD_OUTPUT} failed"
+			clr=false
+		elif Ask "Remove and recreate ${KBUILD_OUTPUT} completely"
+		then	rm -rf -- "${KBUILD_OUTPUT}" || Fatal "rm -rf ${KBUILD_OUTPUT} failed"
+			clr=false
+		fi
+	else	clr=false
+	fi
+	if ! test -d "${KBUILD_OUTPUT}"
+	then	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}" \
+		|| Fatal "cannot create ${KBUILD_OUTPUT}"
+	fi
+	if [ -n "${prefixdir}" ] && ! test -d "${prefixdir}"
+	then	if ${rootinstalls}
+		then	install -d -- "${prefixdir}"
+		else	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}"
+		fi || Fatal "cannot create ${prefixdir}"
+	fi
+	if [ "${xtransfer}" != false ] && ! command -v sudox >/dev/null 2>&1
+	then	Info 'Will not transfer X permissions as sudox is not in $PATH'
+		xtransfer=false
+	fi
+	if [ -z "${xtransfer}" ] && Ask "Transfer X permissions using sudox"
+	then	xtransfer=:
+	else	xtransfer=false
+	fi
+	if [ "${remoteuser}" = 'portage' ]
+	then	removex=:
+	else	removex=false
+	fi
+	${forceflag} && ${passforce} && PushOpt '-f'
+	${notitle} && PushOpt '-t'
+	CalcNice
+	PushOpt '--'
+	eval "set -- ${remoteopt}"
+	if ${xtransfer}
+	then	QuoteExec ${nice} sudox -f "${remoteuser}" "${0}" "${@}" 'remote' ${removex} ${clr}
+	else	removex=false
+		QuoteExec ${nice} sudo -u "${remoteuser}" -H "${0}" "${@}" 'remote' ${removex} ${clr}
+	fi && return
+	rvalue=${?}
+	[ ${rvalue} -eq ${magicquit} ] && Exit
+	[ ${rvalue} -eq ${magicforce} ] && { forceflag=:; return; }
+	Fatal "calling ${0##*/} as ${remoteuser} failed"
+}
+
+nonfatal=false
+MyMake() {
+	Title "make ${1}"
+	eval "set -- ${ccopt} ${makeopts} \"\${@}\""
+	QuoteExec make ${MAKEOPTS} -- O="${KBUILD_OUTPUT}" "${@}" && return
+	${nonfatal} && return 1
+	Fatal 'make' "${@}" 'failed'
+}
+
+CalcModuleName() {
+	[ -n "${name}" ] && [ -n "${modulename}" ] && return
+	name=`readlink -f -- "${KERNEL_DIR}"` || name="${KERNEL_DIR}"
+	name="${name##*/}"
+	name="${name#*-}"
+	[ -n "${name}" ] || name='unknown'
+	modulename="${prefixdir}/lib/modules/${name}"
+}
+
+CalcKernelSystem() {
+	CalcModuleName
+	kernelname="kernel-${name}"
+	systemname="${modulename}/System.map"
+}
+
+ReadCcacheConf() {
+	if [ -z "${CCACHE_DIR}" ]
+	then	ReadVar CCACHE_DIR CCACHE_DIR
+		if [ -z "${CCACHE_DIR}" ]
+		then	ReadVar CCACHE_DIR PORTAGE_TMPDIR
+			CCACHE_DIR="${CCACHE_DIR:-/var/tmp}/ccache"
+		fi
+		export CCACHE_DIR
+		Quote export "CCACHE_DIR=${CCACHE_DIR}"
+	fi
+	[ -n "${CCACHE_SIZE}" ] || ReadVar CCACHE_SIZE CCACHE_SIZE
+	CCACHE_BASEDIR="${KERNEL_DIR%/*}"
+	export CCACHE_BASEDIR
+	Quote export "CCACHE_BASEDIR=${CCACHE_BASEDIR}"
+}
+
+CalcCcache() {
+	ccopt=''
+	${useccache:-:} || return 0
+	if [ "${remoteuser}" = 'portage' ]
+	then	if [ -z "${useccache}" ]
+		then	if FeaturesHave 'ccache'
+			then	! Ask "Use ccache"
+			else	Ask "keep ccache disabled"
+			fi && {
+				useccache=false
+				return 0
+			}
+			useccache=:
+		fi
+		ReadCcacheConf
+	else	${useccache:-false} || return 0
+	fi
+	#Push ccopt 'CC=ccache gcc'
+	Quote PATH="/usr/lib/ccache/bin:${PATH}"
+	PATH="/usr/lib/ccache/bin:${PATH}"
+	Quote export PATH
+	export PATH
+	if [ -n "${CCACHE_SIZE}" ]
+	then	Quote ccache -M "${CCACHE_SIZE}"
+		ccache -M "${CCACHE_SIZE}" >/dev/null 2>&1
+	fi
+}
+
+CalcNice() {
+	if [ "${NICENESS+set}" = 'set' ]
+	then	: ${NICENESS:=0}
+	else	ReadVar NICENESS PORTAGE_NICENESS
+	fi
+	case "${NICENESS}" in
+	*[!0-9]*)	NICENESS='';;
+	esac
+	: ${NICENESS:=9}
+	if [ "${NICENESS}" -le 0 ] || ! [ "`nice`" -eq 0 ]
+	then	nice=''
+	else	nice="nice -n ${NICENESS} --"
+	fi
+}
+
+CalcMakeopts() {
+	[ -n "${MAKEOPTS}" ] && return
+	ReadVar mkopts MAKEOPTS
+	for mkopt in ${mkopts}
+	do	case "${mkopt}" in
+		V=?|--no-print-directory)	continue;;
+		esac
+		MAKEOPTS="${mkopt}"
+	done
+	[ -z "${MAKEOPTS}" ] && MAKEOPTS=' '
+}
+
+ConfigAskMake() {
+	[ -n "${configtype}" ] && [ "${configtype}" != "${1}" ] && return
+	Ask "${2}" && {
+		MyMake "${1}" && configtype="${1}"
+		MyDiff
+	}
+}
+
+CompileRemote() {
+	Title 'prepare'
+	removex="${1}"
+	shift
+	clr="${1}"
+
+	CalcCcache
+	CalcMakeopts
+
+	${clr} && Ask 'Use make mrproper (usually you do not want this)' && \
+		MyMake mrproper
+
+	${oldconfig} || \
+		Ask 'Use make oldconfig (usually you do not want this)' && {
+		MyMake oldconfig
+		MyDiff
+	}
+
+	nonfatal=:
+	ConfigAskMake nconfig 'Use make nconfig'
+	ConfigAskMake xconfig 'Use make xconfig'
+	ConfigAskMake menuconfig 'Use make menuconfig'
+	ConfigAskMake gconfig 'Use make gconfig (this is ugly)'
+	nonfatal=false
+
+	if ${removex}
+	then	rm -- "${HOME}/.Xauthority"
+		[ "${remoteuser}" = 'portage' ] && rm -rf -- "${HOME}/.qt"
+	fi
+	test -f "${KBUILD_OUTPUT}/.config.old" && \
+		Ask "remove ${KBUILD_OUTPUT}/.config.old" && \
+		rm -- "${KBUILD_OUTPUT}/.config.old"
+
+	if Ask 'Compile both, kernel and modules'
+	then	MyMake
+	else	Ask 'Compile kernel'  && MyMake bzImage
+		Ask 'Compile modules' && MyMake modules
+	fi
+}
+
+SetRootPerm() {
+	chmod -- 644 "${1}"
+	permstat=${?}
+	if [ "${UID}" -eq 0 ]
+	then	chown -- root:root "${1}" || permstat=${?}
+	fi
+	return ${permstat}
+}
+
+FixModules() {
+	CalcModuleName
+	rm -- "${modulename}/build" "${modulename}/source"
+}
+
+MoveKernel() {
+	CalcKernelSystem "${1}"
+	if Ask "Move kernel -> ${1}/${kernelname}"
+	then	(
+			set +f
+			found=false
+			for i in "${KBUILD_OUTPUT}"/arch/*/boot/bzImage
+			do	test -r "${i}" || continue
+				test -h "${i}" && continue
+				found=:
+				mv -- "${i}" "${1}/${kernelname}" \
+					&& SetRootPerm "${1}/${kernelname}" \
+					&& break
+				Warning "moving ${i} failed"
+			done
+			${found} || Warning \
+				"${KBUILD_OUTPUT}/arch/*/boot/bzImage not found"
+		)
+		test -f "${KBUILD_OUTPUT}/vmlinux" && rm -- "${KBUILD_OUTPUT}/vmlinux"
+	fi
+	Ask "Copy System.map -> ${systemname}" || return 0
+	systemori="${KBUILD_OUTPUT}/System.map"
+	cp --preserve=timestamps -- "${systemori}" "${systemname}" \
+		&& SetRootPerm "${systemname}" \
+		|| Warning 'copying System.map failed'
+}
+
+InstallIntoPrefix() {
+	if Ask "Install modules to ${prefixdir}"
+	then	MyMake INSTALL_MOD_PATH="${prefixdir}" modules_install
+		FixModules
+	fi
+	MoveKernel "${prefixdir}"
+}
+
+# The installation which has to be done as root:
+
+InstallAsRoot() {
+	if [ -n "${prefixdir}" ]
+	then	InstallIntoPrefix
+		return
+	fi
+	if Ask 'Install modules'
+	then	MyMake modules_install
+		FixModules
+	fi
+	bootname='/boot'
+	if ! cd -- "${bootname}" >/dev/null
+	then	Warning "could not cd to ${bootname}"
+		return
+	fi
+	MoveKernel "${bootname}"
+	if test -r 'bzImage' && Ask 'Set both, new and previous symlink'
+	then	mv -- 'bzImage' 'bzImage.previous' \
+			|| Warning "moving old bzImage failed"
+		ln -s -- "${kernelname}" 'bzImage' \
+			|| Fatal "setting new bzImage failed"
+	elif Ask 'Set new symlink'
+	then	ln -sf -- "${kernelname}" 'bzImage' \
+			|| Fatal "setting new bzImage failed"
+	fi
+}
+
+FinishText() {
+	Title '@module-rebuild'
+	printf '%s\n' '
+Do not forget to reemerge all packages containing kernel modules:
+
+	emerge @module-rebuild
+'
+	exit
+}
+
+if [ ${#} -ne 0 ]
+then	arg="${1}"
+	shift
+elif [ -n "${remoteopt}" ]
+then	arg='-'
+fi
+
+USER="`id -un`"
+UID="`id -u`"
+GID="`id -g`"
+case "${arg}" in
+-)
+	Info "${0##*/}: called as ${USER} (${UID}:${GID})"
+	[ "${UID}" -eq 0 ] && [ "${GID}" -eq 0 ] && [ "${USER}" = 'root' ] || {
+		Warning 'this script should be called as root.'
+	}
+	PrepAndRemote
+	Info "Remote script finished; back to ${USER} (${UID}:${GID})"
+	${rootinstalls} && InstallAsRoot
+	FinishText
+;;
+remote)
+	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
+	quitstatus=${magicquit}
+	CompileRemote "${@}"
+	${rootinstalls} || InstallIntoPrefix
+	${forceflag} && Exit ${magicforce}
+;;
+*)
+	Usage
+;;
+esac
+Exit 0
