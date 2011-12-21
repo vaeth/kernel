@@ -7,7 +7,7 @@ I got bored of typing these over and over and thus have written a convenient
 script to automate this task.
 
 This POSIX shell script is optimized for usage under Gentoo with portage
-(and can use app-portage/eix to speed): It uses portage to determine some
+(and can use app-portage/eix to speed up): It uses portage to determine some
 default paths and settings; it is currently untested in different environments.
 
 This script requires that you have set KBUILD_OUTPUT so that the
