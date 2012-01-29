@@ -1,7 +1,5 @@
 #! /bin/sh
 
-PATH="/home/gentoo/various/bin:/home/bin:${PATH}"
-
 eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=''
 if [ -n "${eix_functions}" ]
 then	. "${eix_functions}"
@@ -94,7 +92,6 @@ MyDiff() {
 
 Usage() {
 	printf '%s\n' "Usage: ${0##*/} [options]
-(Version 1.10)
 This script will compile and install the kernel and kernelmodules
 (asking at each step what should be done).
 The following options are available:
@@ -574,7 +571,7 @@ FinishText() {
 	printf '%s\n' '
 Do not forget to reemerge all packages containing kernel modules:
 
-	emerge @module-rebuild
+	emerge -1 @module-rebuild
 '
 	exit
 }
