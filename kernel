@@ -15,7 +15,9 @@ set -f
 
 have_set_title=false
 Title() {
-	${notitle} || printf '\033]0;%s: %s\007' "${0##*/}" "${*}"
+	! ${statusline} || return
+	! ${softstatus} || printf '\033k%s: %s\\' "${0##*/}" "${*}"
+	printf '\033]0;%s: %s\007' "${0##*/}" "${*}"
 	have_set_title=:
 }
 
@@ -109,7 +111,7 @@ The following options are available:
 
   -Y       transfer X data using sudox (default with USER=portage and -x|-g)
   -X       do not transfer X data
-  -t       do not modify title
+  -H       do not modify status line
 
   -c       Use ccache. The environment variables CCACHE_DIR and CCACHE_SIZE
            are interpreted as by portage.
@@ -148,9 +150,9 @@ xtransfer=''
 remoteuser=''
 prefixdir=''
 rootinstalls=:
-notitle=false
+statusline=:
 OPTIND=1
-while getopts 'fpnmgxNtcCxXa:u:o:O:?hH' opt
+while getopts 'fpnmgxNHcCxXa:u:o:O:?h' opt
 do	PushOpt "-${opt}"
 	case "${opt}" in
 	f)	forceflag=:;;
@@ -160,7 +162,7 @@ do	PushOpt "-${opt}"
 	m)	configtype='menuconfig';;
 	g)	configtype='gconfig';;
 	N)	configtype='none';;
-	t)	notitle=:;;
+	H)	statusline=false;;
 	c)	useccache=:;;
 	C)	useccache=false;;
 	Y)	xtransfer=:;;
@@ -173,6 +175,18 @@ do	PushOpt "-${opt}"
 	esac
 done
 shift $(( ${OPTIND} - 1 ))
+
+${statusline} && case "${TERM}" in
+screen*)
+	softstatus=:
+;;
+xterm*|rxvt*|aterm*|konsole*|gnome*|Eterm*|kterm*|interix*)
+	softstatus=false
+;;
+*)
+	statusline=false
+;;
+esac
 
 if [ -z "${remoteuser}" ]
 then	remoteuser='portage'
@@ -331,7 +345,7 @@ PrepAndRemote() {
 	else	removex=false
 	fi
 	${forceflag} && ${passforce} && PushOpt '-f'
-	${notitle} && PushOpt '-t'
+	${statusline} || PushOpt '-H'
 	CalcNice
 	PushOpt '--'
 	eval "set -- ${remoteopt}"
