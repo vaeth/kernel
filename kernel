@@ -5,8 +5,8 @@ if [ -n "${eix_functions}" ]
 then	. "${eix_functions}"
 else
 ReadVar() {
-	read_var="`portageq envvar ${2}`" || read_var=''
-	eval "${1}=\"\${read_var}\""
+	read_var=`portageq envvar ${2}` || read_var=''
+	eval "${1}=\${read_var}"
 	[ -n "${read_var}" ]
 }
 fi
@@ -22,7 +22,7 @@ Title() {
 }
 
 Exit() {
-	a="${1:-$?}"
+	a=${1:-${?}}
 	${have_set_title} && if [ ${a} -eq 0 ]
 	then Title "finish"
 	else Title "failure"
@@ -30,48 +30,60 @@ Exit() {
 	exit ${a}
 }
 
-
-Warning() {
-	printf '%s: warning: %s\n' "${0##*/}" "${*}" >&2
+Echo() {
+	printf '%s\n' "${*}"
 }
 
-Fatal() {
-	printf '%s: %s\n' "${0##*/}" "${*}" >&2
-	Exit 2
+Echon() {
+	printf '%s' "${*}"
+}
+
+Warning() {
+	Echo "${0##*/}: warning: ${*}" >&2
 }
 
 Info() {
-	printf '### %s\n' "${*}"
+	printf '### %s\n' "${@}"
+}
+
+Fatal() {
+	Echo "${0##*/}: ${*}" >&2
+	Exit 2
 }
 
 Push() {
-	v_="${1}"
+	case ${1} in
+	-*)	shift
+		eval "${1}=''";;
+	esac
+	PushD_=${1}
 	shift
-	eval "for i_
-	do	[ -z \"\${${v_}}\" ] && ${v_}=\\' || ${v_}=\"\${${v_}} '\"
-		j_=\"\${i_}\"
+	eval "for PushA_
+	do	[ -z \"\${${PushD_}}\" ] && ${PushD_}=\\' \
+			|| ${PushD_}=\"\${${PushD_}} '\"
+		PushB_=\${PushA_}
 		while {
-			f_=\"\${j_%%\\'*}\"
-			[ \"\${f_}\" != \"\${j_}\" ]
+			PushC_=\${PushB_%%\\'*}
+			[ \"\${PushC_}\" != \"\${PushB_}\" ]
 		}
-		do	${v_}=\"\${${v_}}\${f_}'\\\\''\"
-			j_=\"\${j_#*\\'}\"
+		do	${PushD_}=\"\${${PushD_}}\${PushC_}'\\\\''\"
+			PushB_=\${PushB_#*\\'}
 		done
-		${v_}=\"\${${v_}}\${j_}'\"
+		${PushD_}=\"\${${PushD_}}\${PushB_}'\"
 	done"
 }
 
+unset LC_ALL
 LC_COLLATE=C
 Quote() {
-	printf '# %s' "${1}"
+	Echon "# ${1}"
 	shift
 	for q
-	do	case "${q}" in
+	do	case ${q} in
 		*[!-+=/:.0-9_a-zA-Z]*)
-			q_=''
-			Push q_ "${q}"
-			printf ' %s' "${q_}";;
-		*)	printf ' %s' "${q}";;
+			Push -c q_ "${q}"
+			Echon " ${q_}";;
+		*)	Echon " ${q}";;
 		esac
 	done
 	echo
@@ -93,7 +105,7 @@ MyDiff() {
 }
 
 Usage() {
-	printf '%s\n' "Usage: ${0##*/} [options]
+	Echo "Usage: ${0##*/} [options]
 This script will compile and install the kernel and kernelmodules
 (asking at each step what should be done).
 The following options are available:
@@ -152,9 +164,9 @@ prefixdir=''
 rootinstalls=:
 statusline=:
 OPTIND=1
-while getopts 'fpnmgxNHcCxXa:u:o:O:?h' opt
+while getopts 'fpnmgxNHcCxXa:u:o:O:h?' opt
 do	PushOpt "-${opt}"
-	case "${opt}" in
+	case ${opt} in
 	f)	forceflag=:;;
 	p)	oldconfig=:;;
 	n)	configtype='nconfig';;
@@ -167,25 +179,27 @@ do	PushOpt "-${opt}"
 	C)	useccache=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
-	a)	PushOpt "${OPTARG}"; PushMake "${OPTARG}";;
-	u)	PushOpt "${OPTARG}"; remoteuser="${OPTARG}";;
-	o)	PushOpt "${OPTARG}"; prefixdir="${OPTARG}"; rootinstalls=false;;
-	O)	PushOpt "${OPTARG}"; prefixdir="${OPTARG}";;
+	a)	PushOpt "${OPTARG}"
+		PushMake "${OPTARG}";;
+	u)	PushOpt "${OPTARG}"
+		remoteuser=${OPTARG};;
+	o)	PushOpt "${OPTARG}"
+		prefixdir=${OPTARG}
+		rootinstalls=false;;
+	O)	PushOpt "${OPTARG}"
+		prefixdir=${OPTARG};;
 	*)	Usage 0;;
 	esac
 done
 shift $(( ${OPTIND} - 1 ))
 
-${statusline} && case "${TERM}" in
+${statusline} && case ${TERM} in
 screen*)
-	softstatus=:
-;;
+	softstatus=:;;
 xterm*|rxvt*|aterm*|konsole*|gnome*|Eterm*|kterm*|interix*)
-	softstatus=false
-;;
+	softstatus=false;;
 *)
-	statusline=false
-;;
+	statusline=false;;
 esac
 
 if [ -z "${remoteuser}" ]
@@ -193,7 +207,7 @@ then	remoteuser='portage'
 	PushOpt '-u' "${remoteuser}"
 fi
 
-if [ -z "${xtransfer}" ] && case "${configtype}" in
+if [ -z "${xtransfer}" ] && case ${configtype} in
 	x*|g*)	:;;
 	*)	false;;
 	esac
@@ -201,7 +215,7 @@ then	[ "${remoteuser}" = 'portage' ] && xtransfer=: || xtransfer=false
 fi
 
 : ${KERNEL_DIR:=/usr/src/linux}
-: ${KBUILD_OUTPUT:="${KERNEL_DIR}"}
+: ${KBUILD_OUTPUT:=${KERNEL_DIR}}
 
 test -d "${KERNEL_DIR}" || \
 	Fatal "directory KERNEL_DIR=${KERNEL#DIR} does not exist"
@@ -220,11 +234,11 @@ fi
 
 BackSpaceArg() {
 	[ -z "${1}" ] && return
-	bckspc="${1}"
+	bckspc=${1}
 	bckspt=''
 	while [ -n "${bckspc}" ]
-	do	bckspt="${bckspt}"'\b \b'
-		bckspc="${bckspc%?}"
+	do	bckspt=${bckspt}'\b \b'
+		bckspc=${bckspc%?}
 	done
 	printf "${bckspt}"
 }
@@ -232,33 +246,33 @@ BackSpaceArg() {
 quitstatus=0
 Ask() {
 	if ${forceflag}
-	then	printf '%s.\n' "${*}"
+	then	Echo "${*}."
 		return 0
 	fi
 	Title '???'
 	askt='(Yes/No/Rest/Quit) '
-	printf '%s? %s' "${*}" "${askt}"
+	Echon "${*}? ${askt}"
 	while :
-	do	oldtty="`stty -g`"
+	do	oldtty=`stty -g`
 		stty -icanon -echo
-		askkey="`dd count=1 bs=1 2>/dev/null`"
+		askkey=`dd count=1 bs=1 2>/dev/null`
 		stty ${oldtty}
-		case "${askkey}" in
-		y*|Y*)	BackSpaceArg "${askt}"
-			echo "Yes"
+		case ${askkey} in
+		[yY]*)	BackSpaceArg "${askt}"
+			Echo 'Yes'
 			return 0
 		;;
-		n*|N*)	BackSpaceArg "${askt}"
-			echo "No"
+		[nN]*)	BackSpaceArg "${askt}"
+			Echo 'No'
 			return 1
 		;;
-		r*|R*)	BackSpaceArg "${askt}"
-			echo "Rest"
+		[rR]*)	BackSpaceArg "${askt}"
+			Echo 'Rest'
 			forceflag=:
 			return 0
 		;;
-		q*|Q*)	BackSpaceArg "${askt}"
-			echo "Quit"
+		[qQ]*)	BackSpaceArg "${askt}"
+			Echo 'Quit'
 			Exit ${quitstatus}
 		;;
 		esac
@@ -294,11 +308,8 @@ PrepAndRemote() {
 	if ${forceflag}
 	then	passforce=false
 	else	passforce=:
-		Info ''
-		Info 'You will get asked interactively at each step.'
-		Info \
-'To avoid this, use option -f or reply on a question with r(est).'
-		Info ''
+		Info '' 'You will get asked interactively at each step.' \
+	'To avoid this, use option -f or reply on a question with r(est).' ''
 	fi
 	clr=:
 	if test -d "${KBUILD_OUTPUT}"
@@ -356,7 +367,10 @@ PrepAndRemote() {
 	fi && return
 	rvalue=${?}
 	[ ${rvalue} -eq ${magicquit} ] && Exit
-	[ ${rvalue} -eq ${magicforce} ] && { forceflag=:; return; }
+	[ ${rvalue} -eq ${magicforce} ] && {
+		forceflag=:
+		return
+	}
 	Fatal "calling ${0##*/} as ${remoteuser} failed"
 }
 
@@ -371,9 +385,9 @@ MyMake() {
 
 CalcModuleName() {
 	[ -n "${name}" ] && [ -n "${modulename}" ] && return
-	name=`readlink -f -- "${KERNEL_DIR}"` || name="${KERNEL_DIR}"
-	name="${name##*/}"
-	name="${name#*-}"
+	name=`readlink -f -- "${KERNEL_DIR}"` || name=${KERNEL_DIR}
+	name=${name##*/}
+	name=${name#*-}
 	[ -n "${name}" ] || name='unknown'
 	modulename="${prefixdir}/lib/modules/${name}"
 }
@@ -395,7 +409,7 @@ ReadCcacheConf() {
 		Quote export "CCACHE_DIR=${CCACHE_DIR}"
 	fi
 	[ -n "${CCACHE_SIZE}" ] || ReadVar CCACHE_SIZE CCACHE_SIZE
-	CCACHE_BASEDIR="${KERNEL_DIR%/*}"
+	CCACHE_BASEDIR=${KERNEL_DIR%/*}
 	export CCACHE_BASEDIR
 	Quote export "CCACHE_BASEDIR=${CCACHE_BASEDIR}"
 }
@@ -418,8 +432,8 @@ CalcCcache() {
 	else	${useccache:-false} || return 0
 	fi
 	#Push ccopt 'CC=ccache gcc'
-	Quote PATH="/usr/lib/ccache/bin:${PATH}"
-	PATH="/usr/lib/ccache/bin:${PATH}"
+	Quote PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
+	PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
 	Quote export PATH
 	export PATH
 	if [ -n "${CCACHE_SIZE}" ]
@@ -448,9 +462,9 @@ CalcMakeopts() {
 	ReadVar mkopts MAKEOPTS
 	for mkopt in ${mkopts}
 	do	case "${mkopt}" in
-		V=?|--no-print-directory)	continue;;
+		V=*|--no-print-directory)	continue;;
 		esac
-		MAKEOPTS="${mkopt}"
+		MAKEOPTS=${mkopt}
 	done
 	[ -z "${MAKEOPTS}" ] && MAKEOPTS=' '
 }
@@ -458,16 +472,16 @@ CalcMakeopts() {
 ConfigAskMake() {
 	[ -n "${configtype}" ] && [ "${configtype}" != "${1}" ] && return
 	Ask "${2}" && {
-		MyMake "${1}" && configtype="${1}"
+		MyMake "${1}" && configtype=${1}
 		MyDiff
 	}
 }
 
 CompileRemote() {
 	Title 'prepare'
-	removex="${1}"
+	removex=${1}
 	shift
-	clr="${1}"
+	clr=${1}
 
 	CalcCcache
 	CalcMakeopts
@@ -591,15 +605,15 @@ Do not forget to reemerge all packages containing kernel modules:
 }
 
 if [ ${#} -ne 0 ]
-then	arg="${1}"
+then	arg=${1}
 	shift
 elif [ -n "${remoteopt}" ]
 then	arg='-'
 fi
 
-USER="`id -un`"
-UID="`id -u`"
-GID="`id -g`"
+USER=`id -un`
+UID=`id -u`
+GID=`id -g`
 case "${arg}" in
 -)
 	Info "${0##*/}: called as ${USER} (${UID}:${GID})"
