@@ -1,12 +1,12 @@
 #! /bin/sh
 
-eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=''
+eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=
 if [ -n "${eix_functions}" ]
 then	. "${eix_functions}"
 else
 ReadVar() {
-	read_var=`portageq envvar ${2}` || read_var=''
-	eval "${1}=\${read_var}"
+	read_var=`portageq envvar ${2}` || read_var=
+	eval ${1}=\${read_var}
 	[ -n "${read_var}" ]
 }
 fi
@@ -54,7 +54,7 @@ Fatal() {
 Push() {
 	case ${1} in
 	-*)	shift
-		eval "${1}=''";;
+		eval ${1}=;;
 	esac
 	PushD_=${1}
 	shift
@@ -144,23 +144,23 @@ The following options are available:
 	Exit ${1:-1}
 }
 
-remoteopt=''
+remoteopt=
 PushOpt() {
 	Push remoteopt "${@}"
 }
 
-makeopts=''
+makeopts=
 PushMake() {
 	Push makeopts "${@}"
 }
 
 forceflag=false
 oldconfig=false
-configtype=''
-useccache=''
-xtransfer=''
-remoteuser=''
-prefixdir=''
+configtype=
+useccache=
+xtransfer=
+remoteuser=
+prefixdir=
 rootinstalls=:
 statusline=:
 OPTIND=1
@@ -235,7 +235,7 @@ fi
 BackSpaceArg() {
 	[ -z "${1}" ] && return
 	bckspc=${1}
-	bckspt=''
+	bckspt=
 	while [ -n "${bckspc}" ]
 	do	bckspt=${bckspt}'\b \b'
 		bckspc=${bckspc%?}
@@ -319,7 +319,7 @@ PrepAndRemote() {
 					|| Fatal "cd ${KBUILD_OUTPUT} failed"
 				set +f
 				for i in .* *
-				do	case "${i}" in
+				do	case ${i} in
 					.|..|.config*)	continue;;
 					esac
 					test -r "${i}" || test -h "${i}" || continue
@@ -415,7 +415,7 @@ ReadCcacheConf() {
 }
 
 CalcCcache() {
-	ccopt=''
+	ccopt=
 	${useccache:-:} || return 0
 	if [ "${remoteuser}" = 'portage' ]
 	then	if [ -z "${useccache}" ]
@@ -447,12 +447,12 @@ CalcNice() {
 	then	: ${NICENESS:=0}
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
-	case "${NICENESS}" in
-	*[!0-9]*)	NICENESS='';;
+	case ${NICENESS} in
+	*[!0-9]*)	NICENESS=;;
 	esac
 	: ${NICENESS:=9}
 	if [ "${NICENESS}" -le 0 ] || ! [ "`nice`" -eq 0 ]
-	then	nice=''
+	then	nice=
 	else	nice="nice -n ${NICENESS} --"
 	fi
 }
@@ -461,7 +461,7 @@ CalcMakeopts() {
 	[ -n "${MAKEOPTS}" ] && return
 	ReadVar mkopts MAKEOPTS
 	for mkopt in ${mkopts}
-	do	case "${mkopt}" in
+	do	case ${mkopt} in
 		V=*|--no-print-directory)	continue;;
 		esac
 		MAKEOPTS=${mkopt}
@@ -614,7 +614,7 @@ fi
 USER=`id -un`
 UID=`id -u`
 GID=`id -g`
-case "${arg}" in
+case ${arg} in
 -)
 	Info "${0##*/}: called as ${USER} (${UID}:${GID})"
 	[ "${UID}" -eq 0 ] && [ "${GID}" -eq 0 ] && [ "${USER}" = 'root' ] || {
