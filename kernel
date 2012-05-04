@@ -1,9 +1,9 @@
-#! /bin/sh
+#! /usr/bin/env sh
 
 eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=
 if [ -n "${eix_functions}" ]
 then	. "${eix_functions}"
-else
+else	. push.sh
 ReadVar() {
 	read_var=`portageq envvar ${2}` || read_var=
 	eval ${1}=\${read_var}
@@ -49,28 +49,6 @@ Info() {
 Fatal() {
 	Echo "${0##*/}: ${*}" >&2
 	Exit 2
-}
-
-Push() {
-	case ${1} in
-	-*)	shift
-		eval ${1}=;;
-	esac
-	PushD_=${1}
-	shift
-	eval "for PushA_
-	do	[ -z \"\${${PushD_}}\" ] && ${PushD_}=\\' \
-			|| ${PushD_}=\"\${${PushD_}} '\"
-		PushB_=\${PushA_}
-		while {
-			PushC_=\${PushB_%%\\'*}
-			[ \"\${PushC_}\" != \"\${PushB_}\" ]
-		}
-		do	${PushD_}=\"\${${PushD_}}\${PushC_}'\\\\''\"
-			PushB_=\${PushB_#*\\'}
-		done
-		${PushD_}=\"\${${PushD_}}\${PushB_}'\"
-	done"
 }
 
 unset LC_ALL
@@ -260,24 +238,19 @@ Ask() {
 		case ${askkey} in
 		[yY]*)	BackSpaceArg "${askt}"
 			Echo 'Yes'
-			return 0
-		;;
+			return 0;;
 		[nN]*)	BackSpaceArg "${askt}"
 			Echo 'No'
-			return 1
-		;;
+			return 1;;
 		[rR]*)	BackSpaceArg "${askt}"
 			Echo 'Rest'
 			forceflag=:
-			return 0
-		;;
+			return 0;;
 		[qQ]*)	BackSpaceArg "${askt}"
 			Echo 'Quit'
-			Exit ${quitstatus}
-		;;
+			Exit ${quitstatus};;
 		esac
 	done
-
 }
 
 read_features=:
@@ -553,7 +526,8 @@ MoveKernel() {
 	fi
 	Ask "Copy System.map -> ${systemname}" || return 0
 	systemori="${KBUILD_OUTPUT}/System.map"
-	cp --preserve=timestamps -- "${systemori}" "${systemname}" \
+	cp -- "${systemori}" "${systemname}" \
+		&& touch -r "${systemori}" -- "${systemname}"
 		&& SetRootPerm "${systemname}" \
 		|| Warning 'copying System.map failed'
 }
