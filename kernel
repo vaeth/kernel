@@ -1,15 +1,15 @@
 #! /usr/bin/env sh
 
-eix_functions=`command -v eix-functions.sh 2>/dev/null` || eix_functions=
-if [ -n "${eix_functions}" ]
-then	. "${eix_functions}"
-else	. push.sh
-ReadVar() {
+if command -v eix-functions.sh 2>/dev/null
+then	. eix-functions.sh
+else	ReadVar() {
 	read_var=`portageq envvar ${2}` || read_var=
 	eval ${1}=\${read_var}
 	[ -n "${read_var}" ]
 }
 fi
+
+. push.sh
 
 set -f
 
@@ -51,20 +51,9 @@ Fatal() {
 	Exit 2
 }
 
-unset LC_ALL
-LC_COLLATE=C
 Quote() {
-	Echon "# ${1}"
-	shift
-	for q
-	do	case ${q} in
-		*[!-+=/:.0-9_a-zA-Z]*)
-			Push -c q_ "${q}"
-			Echon " ${q_}";;
-		*)	Echon " ${q}";;
-		esac
-	done
-	echo
+	Push -c q "${@}"
+	Echo "# ${q}"
 }
 
 QuoteExec() {
@@ -439,7 +428,7 @@ CalcMakeopts() {
 		esac
 		MAKEOPTS=${mkopt}
 	done
-	[ -z "${MAKEOPTS}" ] && MAKEOPTS=' '
+	: ${MAKEOPTS:= }
 }
 
 ConfigAskMake() {
@@ -527,7 +516,7 @@ MoveKernel() {
 	Ask "Copy System.map -> ${systemname}" || return 0
 	systemori="${KBUILD_OUTPUT}/System.map"
 	cp -- "${systemori}" "${systemname}" \
-		&& touch -r "${systemori}" -- "${systemname}"
+		&& touch -r "${systemori}" -- "${systemname}" \
 		&& SetRootPerm "${systemname}" \
 		|| Warning 'copying System.map failed'
 }
@@ -597,17 +586,14 @@ case ${arg} in
 	PrepAndRemote
 	Info "Remote script finished; back to ${USER} (${UID}:${GID})"
 	${rootinstalls} && InstallAsRoot
-	FinishText
-;;
+	FinishText;;
 remote)
 	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
 	quitstatus=${magicquit}
 	CompileRemote "${@}"
 	${rootinstalls} || InstallIntoPrefix
-	${forceflag} && Exit ${magicforce}
-;;
+	${forceflag} && Exit ${magicforce};;
 *)
-	Usage
-;;
+	Usage;;
 esac
 Exit 0

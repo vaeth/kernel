@@ -9,8 +9,8 @@ script to automate this task.
 This POSIX shell script is optimized for usage under Gentoo with portage
 (and can use app-portage/eix to speed up): It uses portage to determine some
 default paths and settings; it is currently untested in different environments.
-If you do not have eix installed, you need push.sh from
-http://github.com/vaeth/push in your path.
+
+You must have push.sh from http://github.com/vaeth/push in your path.
 
 This script requires that you have set KBUILD_OUTPUT so that the
 output really can occur as a user. (You should set it also in the root
