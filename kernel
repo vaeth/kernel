@@ -5,7 +5,7 @@ then	. eix-functions.sh
 else	ReadVar() {
 	read_var=`portageq envvar ${2}` || read_var=
 	eval ${1}=\${read_var}
-	[ -n "${read_var}" ]
+	[ -n "${read_var:++}" ]
 }
 fi
 
@@ -169,12 +169,12 @@ xterm*|rxvt*|aterm*|konsole*|gnome*|Eterm*|kterm*|interix*)
 	statusline=false;;
 esac
 
-if [ -z "${remoteuser}" ]
+if [ -z "${remoteuser:++}" ]
 then	remoteuser='portage'
 	PushOpt '-u' "${remoteuser}"
 fi
 
-if [ -z "${xtransfer}" ] && case ${configtype} in
+if [ -z "${xtransfer:++}" ] && case ${configtype} in
 	x*|g*)	:;;
 	*)	false;;
 	esac
@@ -200,10 +200,10 @@ will honour it later when emerging kernel-related ebuilds."
 fi
 
 BackSpaceArg() {
-	[ -z "${1}" ] && return
+	[ -z "${1:++}" ] && return
 	bckspc=${1}
 	bckspt=
-	while [ -n "${bckspc}" ]
+	while [ -n "${bckspc:++}" ]
 	do	bckspt=${bckspt}'\b \b'
 		bckspc=${bckspc%?}
 	done
@@ -299,7 +299,7 @@ PrepAndRemote() {
 	then	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}" \
 		|| Fatal "cannot create ${KBUILD_OUTPUT}"
 	fi
-	if [ -n "${prefixdir}" ] && ! test -d "${prefixdir}"
+	if [ -n "${prefixdir:++}" ] && ! test -d "${prefixdir}"
 	then	if ${rootinstalls}
 		then	install -d -- "${prefixdir}"
 		else	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}"
@@ -309,7 +309,7 @@ PrepAndRemote() {
 	then	Info 'Will not transfer X permissions as sudox is not in $PATH'
 		xtransfer=false
 	fi
-	if [ -z "${xtransfer}" ] && Ask "Transfer X permissions using sudox"
+	if [ -z "${xtransfer:++}" ] && Ask "Transfer X permissions using sudox"
 	then	xtransfer=:
 	else	xtransfer=false
 	fi
@@ -346,11 +346,11 @@ MyMake() {
 }
 
 CalcModuleName() {
-	[ -n "${name}" ] && [ -n "${modulename}" ] && return
+	[ -n "${name:++}" ] && [ -n "${modulename:++}" ] && return
 	name=`readlink -f -- "${KERNEL_DIR}"` || name=${KERNEL_DIR}
 	name=${name##*/}
 	name=${name#*-}
-	[ -n "${name}" ] || name='unknown'
+	[ -n "${name:++}" ] || name='unknown'
 	modulename="${prefixdir}/lib/modules/${name}"
 }
 
@@ -361,16 +361,16 @@ CalcKernelSystem() {
 }
 
 ReadCcacheConf() {
-	if [ -z "${CCACHE_DIR}" ]
+	if [ -z "${CCACHE_DIR:++}" ]
 	then	ReadVar CCACHE_DIR CCACHE_DIR
-		if [ -z "${CCACHE_DIR}" ]
+		if [ -z "${CCACHE_DIR:++}" ]
 		then	ReadVar CCACHE_DIR PORTAGE_TMPDIR
 			CCACHE_DIR="${CCACHE_DIR:-/var/tmp}/ccache"
 		fi
 		export CCACHE_DIR
 		Quote export "CCACHE_DIR=${CCACHE_DIR}"
 	fi
-	[ -n "${CCACHE_SIZE}" ] || ReadVar CCACHE_SIZE CCACHE_SIZE
+	[ -n "${CCACHE_SIZE:++}" ] || ReadVar CCACHE_SIZE CCACHE_SIZE
 	CCACHE_BASEDIR=${KERNEL_DIR%/*}
 	export CCACHE_BASEDIR
 	Quote export "CCACHE_BASEDIR=${CCACHE_BASEDIR}"
@@ -380,7 +380,7 @@ CalcCcache() {
 	ccopt=
 	${useccache:-:} || return 0
 	if [ "${remoteuser}" = 'portage' ]
-	then	if [ -z "${useccache}" ]
+	then	if [ -z "${useccache:++}" ]
 		then	if FeaturesHave 'ccache'
 			then	! Ask "Use ccache"
 			else	Ask "keep ccache disabled"
@@ -398,7 +398,7 @@ CalcCcache() {
 	PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
 	Quote export PATH
 	export PATH
-	if [ -n "${CCACHE_SIZE}" ]
+	if [ -n "${CCACHE_SIZE:++}" ]
 	then	Quote ccache -M "${CCACHE_SIZE}"
 		ccache -M "${CCACHE_SIZE}" >/dev/null 2>&1
 	fi
@@ -420,7 +420,7 @@ CalcNice() {
 }
 
 CalcMakeopts() {
-	[ -n "${MAKEOPTS}" ] && return
+	[ -n "${MAKEOPTS:++}" ] && return
 	ReadVar mkopts MAKEOPTS
 	for mkopt in ${mkopts}
 	do	case ${mkopt} in
@@ -432,7 +432,7 @@ CalcMakeopts() {
 }
 
 ConfigAskMake() {
-	[ -n "${configtype}" ] && [ "${configtype}" != "${1}" ] && return
+	[ -n "${configtype:++}" ] && [ "${configtype}" != "${1}" ] && return
 	Ask "${2}" && {
 		MyMake "${1}" && configtype=${1}
 		MyDiff
@@ -532,7 +532,7 @@ InstallIntoPrefix() {
 # The installation which has to be done as root:
 
 InstallAsRoot() {
-	if [ -n "${prefixdir}" ]
+	if [ -n "${prefixdir:++}" ]
 	then	InstallIntoPrefix
 		return
 	fi
@@ -570,7 +570,7 @@ Do not forget to reemerge all packages containing kernel modules:
 if [ ${#} -ne 0 ]
 then	arg=${1}
 	shift
-elif [ -n "${remoteopt}" ]
+elif [ -n "${remoteopt:++}" ]
 then	arg='-'
 fi
 
