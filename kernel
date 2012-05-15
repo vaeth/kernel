@@ -1,6 +1,6 @@
 #! /usr/bin/env sh
 
-if command -v eix-functions.sh 2>/dev/null
+if command -v eix-functions.sh >/dev/null 2>&1
 then	. eix-functions.sh
 else	ReadVar() {
 	read_var=`portageq envvar ${2}` || read_var=
@@ -187,7 +187,14 @@ fi
 test -d "${KERNEL_DIR}" || \
 	Fatal "directory KERNEL_DIR=${KERNEL#DIR} does not exist"
 
-cd -- "${KERNEL_DIR}" >/dev/null || Fatal "cd ${KERNEL_DIR} failed"
+Cd() {
+	case ${1} in
+	/*)	cd "${1}" >/dev/null 2>&1 || Fatal "cd ${1} failed";;
+	*)	cd "./${1#./}" >/dev/null 2>&1 || Fatal "cd ${PWD}/${1#./} failed";;
+	esac
+}
+
+Cd "${KERNEL_DIR}"
 
 if [ "${KERNEL_DIR}" = "${KBUILD_OUTPUT}" ] || \
 	[ "${PWD}" = "${KBUILD_OUTPUT}" ]
@@ -277,8 +284,7 @@ PrepAndRemote() {
 	if test -d "${KBUILD_OUTPUT}"
 	then	if Ask "Clean ${KBUILD_OUTPUT} (only partially: keep .config*)"
 		then	(
-				cd -- "${KBUILD_OUTPUT}" >/dev/null \
-					|| Fatal "cd ${KBUILD_OUTPUT} failed"
+				Cd "${KBUILD_OUTPUT}"
 				set +f
 				for i in .* *
 				do	case ${i} in
@@ -541,10 +547,7 @@ InstallAsRoot() {
 		FixModules
 	fi
 	bootname='/boot'
-	if ! cd -- "${bootname}" >/dev/null
-	then	Warning "could not cd to ${bootname}"
-		return
-	fi
+	Cd "${bootname}"
 	MoveKernel "${bootname}"
 	if test -r 'bzImage' && Ask 'Set both, new and previous symlink'
 	then	mv -- 'bzImage' 'bzImage.previous' \
@@ -589,6 +592,8 @@ case ${arg} in
 	FinishText;;
 remote)
 	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
+	Info 'gcc --version | head -n 1'
+	gcc --version | head -n 1
 	quitstatus=${magicquit}
 	CompileRemote "${@}"
 	${rootinstalls} || InstallIntoPrefix
