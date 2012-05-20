@@ -1,5 +1,7 @@
 #! /usr/bin/env sh
 
+set -f
+
 if command -v eix-functions.sh >/dev/null 2>&1
 then	. eix-functions.sh
 else	ReadVar() {
@@ -8,10 +10,10 @@ else	ReadVar() {
 	[ -n "${read_var:++}" ]
 }
 fi
-
-. push.sh
-
-set -f
+Push() {
+	. push.sh
+	Push "${@}"
+}
 
 have_set_title=false
 Title() {
@@ -454,6 +456,8 @@ CompileRemote() {
 	CalcCcache
 	CalcMakeopts
 
+	Info "`gcc --version | head -n 1`"
+
 	${clr} && Ask 'Use make mrproper (usually you do not want this)' && \
 		MyMake mrproper
 
@@ -592,8 +596,6 @@ case ${arg} in
 	FinishText;;
 remote)
 	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
-	Info 'gcc --version | head -n 1'
-	gcc --version | head -n 1
 	quitstatus=${magicquit}
 	CompileRemote "${@}"
 	${rootinstalls} || InstallIntoPrefix
