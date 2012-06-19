@@ -564,7 +564,28 @@ InstallAsRoot() {
 	fi
 }
 
+CalcTime() {
+	result=
+	for calctimea
+	do	calctimeb=${calctimea:-0}
+		[ "${calctimeb}" -gt 9 ] || calctimeb=0${calctimeb}
+		result=${result}${result:+:}${calctimeb}
+	done
+}
+
 FinishText() {
+	if [ "${time_begin}" -gt 99 ]
+	then	time_total=`date '+%s' 2>/dev/null` || time_total=
+		if [ "${time_total}" -gt 99 ]
+		then	time_seconds=$(( ${time_total} - ${time_begin} ))
+			time_minutes=$(( ${time_seconds} / 60 ))
+			CalcTime $(( ${time_seconds} / 3600 )) \
+				$(( ${time_minutes} % 60 )) \
+				$(( ${time_seconds} % 60 ))
+			Echo "
+Total time elapsed: ${result}"
+		fi
+	fi
 	Title '@module-rebuild'
 	printf '%s\n' '
 Do not forget to reemerge all packages containing kernel modules:
@@ -590,6 +611,7 @@ case ${arg} in
 	[ "${UID}" -eq 0 ] && [ "${GID}" -eq 0 ] && [ "${USER}" = 'root' ] || {
 		Warning 'this script should be called as root.'
 	}
+	time_begin=`date '+%s' 2>/dev/null` || time_begin=
 	PrepAndRemote
 	Info "Remote script finished; back to ${USER} (${UID}:${GID})"
 	${rootinstalls} && InstallAsRoot
