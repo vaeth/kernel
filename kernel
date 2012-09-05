@@ -15,21 +15,47 @@ Push() {
 	Push "${@}"
 }
 
-have_set_title=false
-Title() {
-	${statusline} || return 0
-	! ${softstatus} || printf '\033k%s: %s\\' "${0##*/}" "${*}"
-	printf '\033]0;%s: %s\007' "${0##*/}" "${*}"
-	have_set_title=:
+Exit() {
+	exit ${1}
 }
 
+magicquit=130
+magicforce=65
+Title() {
+Title() {
+:
+}
+	case ${titleopt} in
+	*-*)	return;;
+	esac
+	command -v title >/dev/null 2>&1 || return 0
 Exit() {
-	a=${1:-${?}}
-	${have_set_title} && if [ ${a} -eq 0 ]
-	then Title "finish"
-	else Title "failure"
+	exitstat=${1:-${?}}
+	trap - EXIT HUP INT TERM
+	[ ${#} -gt 1 ] && exit ${exitstat}
+	if [ ${exitstat} -eq 0 ]
+	then	Title "${0##*/}: finish"
+	elif [ ${exitstat} -eq ${magicforce} ] || [ ${exitstat} -eq ${magicquit} ]
+	then	Title "${0##*/}: remote finish"
+	else	Title "${0##*/}: failure"
 	fi
-	exit ${a}
+	exit ${exitstat}
+}
+TitleTrap() {
+	trap : EXIT HUP INT TERM
+	Title "${0##*/} interrupt"
+	trap - EXIT HUP INT TERM
+	exit ${magicquit}
+}
+	trap TitleTrap EXIT HUP INT TERM
+TitleInit() {
+. title "${@}"
+}
+	TitleInit ${titleopt:+"-${titleopt}"} -- "${@}"
+}
+
+TitleInfo() {
+	Title "${0##*/}: ${*}"
 }
 
 Echo() {
@@ -64,7 +90,7 @@ QuoteExec() {
 }
 
 MyDiff() {
-	Title 'diff'
+	TitleInfo 'diff'
 	diffa="${KBUILD_OUTPUT}/.config.old"
 	diffb="${KBUILD_OUTPUT}/.config"
 	test -f "${diffa}" && test -f "${diffb}" || return 0
@@ -92,7 +118,7 @@ The following options are available:
 
   -Y       transfer X data using sudox (default with USER=portage and -x|-g)
   -X       do not transfer X data
-  -H       do not modify status line
+  -T[pPfHsS-] pass option(s) to the title script; - means no title
 
   -c       Use ccache. The environment variables CCACHE_DIR and CCACHE_SIZE
            are interpreted as by portage.
@@ -131,9 +157,9 @@ xtransfer=
 remoteuser=
 prefixdir=
 rootinstalls=:
-statusline=:
+titleopt=
 OPTIND=1
-while getopts 'fpnmgxNHcCxXa:u:o:O:h?' opt
+while getopts 'fpnmgxNcCxXT:a:u:o:O:h?' opt
 do	PushOpt "-${opt}"
 	case ${opt} in
 	f)	forceflag=:;;
@@ -143,11 +169,12 @@ do	PushOpt "-${opt}"
 	m)	configtype='menuconfig';;
 	g)	configtype='gconfig';;
 	N)	configtype='none';;
-	H)	statusline=false;;
 	c)	useccache=:;;
 	C)	useccache=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
+	T)	PushOpt "${OPTARG}"
+		titleopt=${titleopt}${OPTARG};;
 	a)	PushOpt "${OPTARG}"
 		PushMake "${OPTARG}";;
 	u)	PushOpt "${OPTARG}"
@@ -162,13 +189,9 @@ do	PushOpt "-${opt}"
 done
 shift $(( ${OPTIND} - 1 ))
 
-${statusline} && case ${TERM} in
-screen*)
-	softstatus=:;;
-xterm*|rxvt*|aterm*|konsole*|gnome*|Eterm*|kterm*|interix*)
-	softstatus=false;;
-*)
-	statusline=false;;
+case ${titleopt} in
+*[!pPfHsS-]*)
+	Usage;;
 esac
 
 if [ -z "${remoteuser:++}" ]
@@ -177,7 +200,7 @@ then	remoteuser='portage'
 fi
 
 if [ -z "${xtransfer:++}" ] && case ${configtype} in
-	x*|g*)	:;;
+	[xg]*)	:;;
 	*)	false;;
 	esac
 then	[ "${remoteuser}" = 'portage' ] && xtransfer=: || xtransfer=false
@@ -270,8 +293,6 @@ FeaturesHave() {
 
 # The preparation parts which have to be done as root:
 
-magicquit=66
-magicforce=65
 PrepAndRemote() {
 	remoteUID=`id -u "${remoteuser}"` || Fatal "id -u ${remoteuser} failed"
 	remoteGID=`id -g "${remoteuser}"` || Fatal "id -g ${remoteuser} failed"
@@ -346,7 +367,7 @@ PrepAndRemote() {
 
 nonfatal=false
 MyMake() {
-	Title "make ${1}"
+	TitleInfo "make ${1}"
 	eval "set -- ${ccopt} ${makeopts} \"\${@}\""
 	QuoteExec make ${MAKEOPTS} -- O="${KBUILD_OUTPUT}" "${@}" && return
 	${nonfatal} && return 1
@@ -448,7 +469,7 @@ ConfigAskMake() {
 }
 
 CompileRemote() {
-	Title 'prepare'
+	TitleInfo 'prepare'
 	removex=${1}
 	shift
 	clr=${1}
@@ -586,13 +607,13 @@ FinishText() {
 Total time elapsed: ${result}"
 		fi
 	fi
-	Title '@module-rebuild'
-	printf '%s\n' '
+	TitleInfo '@module-rebuild'
+	Echo '
 Do not forget to reemerge all packages containing kernel modules:
 
 	emerge -1 @module-rebuild
 '
-	exit
+	Exit ${?} 0
 }
 
 if [ ${#} -ne 0 ]
