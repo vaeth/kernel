@@ -2,6 +2,12 @@
 
 set -f
 
+fullcmd=`command -v -- "${0}"`
+fullpath=`readlink -f -- "${fullcmd}" 2>/dev/null` || case ${fullcmd} in
+/*)	fullpath=${fullcmd};;
+*)	fullpath=${PWD%/}/${fullcmd#./};;
+esac
+
 if command -v eix-functions.sh >/dev/null 2>&1
 then	. eix-functions.sh
 else	ReadVar() {
@@ -349,12 +355,15 @@ PrepAndRemote() {
 	${forceflag} && ${passforce} && PushOpt '-f'
 	${statusline} || PushOpt '-H'
 	CalcNice
+	SHELL=`command -v -- sh`
+	Quote export "SHELL=${SHELL}"
+	export SHELL
 	PushOpt '--'
 	eval "set -- ${remoteopt}"
 	if ${xtransfer}
-	then	QuoteExec ${nice} sudox -f "${remoteuser}" "${0}" "${@}" 'remote' ${removex} ${clr}
+	then	QuoteExec ${nice} sudox -f "${remoteuser}" -- "${fullpath}" "${@}" 'remote' ${removex} ${clr}
 	else	removex=false
-		QuoteExec ${nice} sudo -u "${remoteuser}" -H "${0}" "${@}" 'remote' ${removex} ${clr}
+		QuoteExec ${nice} sudo -u "${remoteuser}" -H -s -- "${fullpath}" "${@}" 'remote' ${removex} ${clr}
 	fi && return
 	rvalue=${?}
 	[ ${rvalue} -eq ${magicquit} ] && Exit
@@ -423,9 +432,8 @@ CalcCcache() {
 	else	${useccache:-false} || return 0
 	fi
 	#Push ccopt 'CC=ccache gcc'
-	Quote PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
+	Quote export "PATH=/usr/lib/ccache/bin${PATH:+:}${PATH}"
 	PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
-	Quote export PATH
 	export PATH
 	if [ -n "${CCACHE_SIZE:++}" ]
 	then	Quote ccache -M "${CCACHE_SIZE}"
@@ -434,7 +442,7 @@ CalcCcache() {
 }
 
 CalcNice() {
-	if [ "${NICENESS+set}" = 'set' ]
+	if [ -n "${NICENESS++}" ]
 	then	: ${NICENESS:=0}
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
@@ -446,18 +454,31 @@ CalcNice() {
 	then	nice=
 	else	nice="nice -n ${NICENESS} --"
 	fi
+	ReadVar PORTAGE_IONICE_COMMAND PORTAGE_IONICE_COMMAND
+	: ${PORTAGE_IONICE_COMMAND=ionice -c 3}
+	for niceadd in ${PORTAGE_IONICE_COMMAND} --
+	do	case ${niceadd} in
+		-p|*PID*)
+			continue;;
+		--*)
+			:;;
+		-*p*)
+			nice=${nice}${nice:+ }${niceadd%p*}${niceadd#*p}
+			false;;
+		esac && nice=${nice}${nice:+ }${niceadd}
+		[ "${niceadd}" = '--' ] && break
+	done
 }
 
 CalcMakeopts() {
-	[ -n "${MAKEOPTS:++}" ] && return
+	[ -n "${MAKEOPTS++}" ] && return
 	ReadVar mkopts MAKEOPTS
 	for mkopt in ${mkopts}
 	do	case ${mkopt} in
 		V=*|--no-print-directory)	continue;;
 		esac
-		MAKEOPTS=${mkopt}
+		MAKEOPTS=${MAKEOPTS}${MAKEOPTS:+ }${mkopt}
 	done
-	: ${MAKEOPTS:= }
 }
 
 ConfigAskMake() {
