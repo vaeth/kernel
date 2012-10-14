@@ -361,7 +361,7 @@ PrepAndRemote() {
 	PushOpt '--'
 	eval "set -- ${remoteopt}"
 	if ${xtransfer}
-	then	QuoteExec ${nice} sudox -f "${remoteuser}" -- "${fullpath}" "${@}" 'remote' ${removex} ${clr}
+	then	QuoteExec ${nice} sudox -f -- "${remoteuser}" "${fullpath}" "${@}" 'remote' ${removex} ${clr}
 	else	removex=false
 		QuoteExec ${nice} sudo -u "${remoteuser}" -H -s -- "${fullpath}" "${@}" 'remote' ${removex} ${clr}
 	fi && return
