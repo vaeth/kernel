@@ -374,9 +374,21 @@ PrepAndRemote() {
 	Fatal "calling ${0##*/} as ${remoteuser} failed"
 }
 
+MyMakeTitle() {
+	while :
+	do	case ${1} in
+		*'='*)
+			shift
+			continue;;
+		esac
+		TitleInfo make "${@}"
+		return
+	done
+}
+
 nonfatal=false
 MyMake() {
-	TitleInfo "make ${1}"
+	MyMakeTitle "${@}"
 	eval "set -- ${ccopt} ${makeopts} \"\${@}\""
 	QuoteExec make ${MAKEOPTS} -- O="${KBUILD_OUTPUT}" "${@}" && return
 	${nonfatal} && return 1

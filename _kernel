@@ -1,0 +1,19 @@
+#compdef kernel
+_arguments -s -S -A '-*' : \
+'(-)'{'-h','-\\?'}'[help]' \
+'-f[force always yes]' \
+'-p[force oldconfig (with -f)]' \
+'-n[ask only/force nconfig]' \
+'-x[ask only/force xconfig]' \
+'-m[ask only/force menuconfig]' \
+'-g[ask only/force gconfig]' \
+'-N[do not ask/force any *config]' \
+'-T+[Pass option \[pPfHsS-\] to the title script; -=no title]:title option:(p P f H s S -)' \
+'-u+[USER (compile as USER)]:user for kernel compilation:_users' \
+'-Y[transfer X data (default with -x/-g and USER=portage)]' \
+'-X[do not transfer X data]' \
+'-c[use ccache]' \
+'-C[do not use ccache (default unless USER=portage)]' \
+'*-a+[ARG (add ARG to make)]:argument for make:("CONFIG_DEBUG_SECTION_MISMATCH=y")' \
+'(-O)-o+[PATH (install as USER with prefix PATH)]:prefix to install:_files -/' \
+'(-o)-O+[PATH (install as root with prefix PATH)]:prefix to install:_files -/'

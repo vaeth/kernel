@@ -23,4 +23,7 @@ If you want that the hard status line is set, also the title script from
 http://github.com/vaeth/runtitle (version >=2.0) is required in your path.
 
 For installation, copy kernel with executable permission in your path.
+To obtain support for zsh completion, copy _kernel to a directory of
+your zsh's $fpath.
+
 There is also an ebuild in the mv overlay (which is available by layman).
