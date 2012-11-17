@@ -8,7 +8,7 @@ _arguments -s -S -A '-*' : \
 '-m[ask only/force menuconfig]' \
 '-g[ask only/force gconfig]' \
 '-N[do not ask/force any *config]' \
-'-T+[Pass option \[pPfHsS-\] to the title script; -=no title]:title option:(p P f H s S -)' \
+'*-T+[OPT (set title option)]:title option:_title_opt' \
 '-u+[USER (compile as USER)]:user for kernel compilation:_users' \
 '-Y[transfer X data (default with -x/-g and USER=portage)]' \
 '-X[do not transfer X data]' \
