@@ -529,12 +529,12 @@ CompileRemote() {
 	nonfatal=false
 
 	if ${removex}
-	then	rm -- "${HOME}/.Xauthority"
+	then	rm -f -- "${HOME}/.Xauthority"
 		[ "${remoteuser}" = 'portage' ] && rm -rf -- "${HOME}/.qt"
 	fi
 	test -f "${KBUILD_OUTPUT}/.config.old" && \
 		Ask "remove ${KBUILD_OUTPUT}/.config.old" && \
-		rm -- "${KBUILD_OUTPUT}/.config.old"
+		rm -f -- "${KBUILD_OUTPUT}/.config.old"
 
 	if Ask 'Compile both, kernel and modules'
 	then	MyMake
@@ -554,7 +554,7 @@ SetRootPerm() {
 
 FixModules() {
 	CalcModuleName
-	rm -- "${modulename}/build" "${modulename}/source"
+	rm -f -- "${modulename}/build" "${modulename}/source"
 }
 
 MoveKernel() {
@@ -575,7 +575,7 @@ MoveKernel() {
 			${found} || Warning \
 				"${KBUILD_OUTPUT}/arch/*/boot/bzImage not found"
 		)
-		test -f "${KBUILD_OUTPUT}/vmlinux" && rm -- "${KBUILD_OUTPUT}/vmlinux"
+		test -f "${KBUILD_OUTPUT}/vmlinux" && rm -f -- "${KBUILD_OUTPUT}/vmlinux"
 	fi
 	Ask "Copy System.map -> ${systemname}" || return 0
 	systemori="${KBUILD_OUTPUT}/System.map"
