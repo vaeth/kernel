@@ -487,7 +487,8 @@ CalcMakeopts() {
 	ReadVar mkopts MAKEOPTS
 	for mkopt in ${mkopts}
 	do	case ${mkopt} in
-		V=*|--no-print-directory)	continue;;
+		V=*|--no-print-directory|--output-sync*|-O*)
+			continue;;
 		esac
 		MAKEOPTS=${MAKEOPTS}${MAKEOPTS:+ }${mkopt}
 	done
