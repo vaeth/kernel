@@ -126,10 +126,12 @@ The following options are available:
   -X       do not transfer X data
   -T[pPfHsS-] pass option(s) to the title script; - means no title
 
-  -c       Use ccache. The environment variables CCACHE_DIR and CCACHE_SIZE
-           are interpreted as by portage.
+  -c       Use ccache. The CCACHE_* variables are read from the environment.
            If USER=portage the default depends on FEATURES, and the default
-           of all these three variables is read from portage.
+           of all these variables is read from portage. In this case,
+           CCACHE_BASEDIR is automatically the parent directory of KERNEL_DIR
+           (typically /usr/src) so it may be a good idea to make KBUILD_DIR
+           a subdirectory thereof, too.
   -C       Do not use ccache (default if USER is not portage).
 
   -a PARA  Add PARA to the make parameters. Typical example:
@@ -153,6 +155,11 @@ PushOpt() {
 makeopts=
 PushMake() {
 	Push makeopts "${@}"
+}
+
+exportpass=
+PushExport() {
+	Push exportpass "${@}"
 }
 
 forceflag=false
@@ -236,6 +243,14 @@ Note that setting KBUILD_OUTPUT should be done in the environment of root or
 alternatively in /etc/make.conf (or /etc/portage/make.conf) so that portage
 will honour it later when emerging kernel-related ebuilds."
 fi
+
+ccache_vars=
+for ccache_var in DIR COMPRESS NOCOMPRESS COMPRESSLEVEL NLEVELS EXTENSION \
+	COMPILERCHECK DIRECT NODIRECT DISABLE EXTRAFILES HARDLINK HASHDIR \
+	LOGFILE STATS NOSTATS PATH PREFIX READONLY RECACHE CPP2 SLOPPINESS \
+	TEMPDIR UMASK UNIFY NOUNIFY SIZE
+do	ccache_vars=${ccache_vars}' CCACHE_'${ccache_var}
+done
 
 BackSpaceArg() {
 	[ -z "${1:++}" ] && return
@@ -359,11 +374,13 @@ PrepAndRemote() {
 	Quote export "SHELL=${SHELL}"
 	export SHELL
 	PushOpt '--'
-	eval "set -- ${remoteopt}"
+	for export_var in ${ccache_vars}
+	do	eval "[ -n \"\${${export_var}++}\" ] && PushExport \"\${export_var}=\${${export_var}}\""
+	done
 	if ${xtransfer}
-	then	QuoteExec ${nice} sudox -f -- "${remoteuser}" "${fullpath}" "${@}" 'remote' ${removex} ${clr}
+	then	eval QuoteExec \${nice} sudox -f -- \"\${remoteuser}\" \"\${fullpath}\" ${remoteopt} remote ${exportpass} -- \${removex} \${clr}
 	else	removex=false
-		QuoteExec ${nice} sudo -u "${remoteuser}" -H -s -- "${fullpath}" "${@}" 'remote' ${removex} ${clr}
+		eval QuoteExec \${nice} sudo -u \"\${remoteuser}\" -H -s -- \"\${fullpath}\" ${remoteopt} remote ${exportpass} -- \${removex} \${clr}
 	fi && return
 	rvalue=${?}
 	[ ${rvalue} -eq ${magicquit} ] && Exit
@@ -411,19 +428,39 @@ CalcKernelSystem() {
 }
 
 ReadCcacheConf() {
-	if [ -z "${CCACHE_DIR:++}" ]
-	then	ReadVar CCACHE_DIR CCACHE_DIR
-		if [ -z "${CCACHE_DIR:++}" ]
-		then	ReadVar CCACHE_DIR PORTAGE_TMPDIR
-			CCACHE_DIR="${CCACHE_DIR:-/var/tmp}/ccache"
+	for ccache_var in ${ccache_vars}
+	do	ReadVar ${ccache_var} ${ccache_var}
+		case ${ccache_var} in
+		CCACHE_SIZE)
+			continue;;
+		esac
+		if eval "[ -z \"\${${ccache_var}++}\" ]"
+		then	case ${ccache_var} in
+			CCACHE_SLOPPINESS)
+CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches';;
+			CCACHE_DIR)
+				:;;
+			*)
+				continue;;
+			esac
 		fi
-		export CCACHE_DIR
-		Quote export "CCACHE_DIR=${CCACHE_DIR}"
-	fi
-	[ -n "${CCACHE_SIZE:++}" ] || ReadVar CCACHE_SIZE CCACHE_SIZE
+		if eval "[ -z \"\${${ccache_var}:++}\" ]"
+		then	case ${ccache_var} in
+			CCACHE_DIR)
+				ReadVar CCACHE_DIR PORTAGE_TMPDIR
+				CCACHE_DIR="${CCACHE_DIR:-/var/tmp}/ccache";;
+			*)
+				Quote unset ${ccache_var}
+				eval "unset ${ccache_var}"
+				continue;;
+			esac
+		fi
+		eval "Quote export \"\${ccache_var}=\${${ccache_var}}\"
+export ${ccache_var}"
+	done
 	CCACHE_BASEDIR=${KERNEL_DIR%/*}
-	export CCACHE_BASEDIR
 	Quote export "CCACHE_BASEDIR=${CCACHE_BASEDIR}"
+	export CCACHE_BASEDIR
 }
 
 CalcCcache() {
@@ -673,6 +710,21 @@ case ${arg} in
 	FinishText;;
 remote)
 	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
+	while case ${1:-+} in
+	*'='*)
+		exportvar=${1%%=*}
+		exportvalue=${1#*=}
+		Quote export "${exportvar}=${exportvalue}"
+		eval ${exportvar}=\${exportvalue}
+		export "${exportvar}";;
+	'--')
+		false;;
+	*)
+		Fatal "internal error: argument \"${1}\"";;
+	esac
+	do	shift
+	done
+	shift
 	quitstatus=${magicquit}
 	CompileRemote "${@}"
 	${rootinstalls} || InstallIntoPrefix
