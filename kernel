@@ -437,7 +437,7 @@ ReadCcacheConf() {
 		if eval "[ -z \"\${${ccache_var}++}\" ]"
 		then	case ${ccache_var} in
 			CCACHE_SLOPPINESS)
-CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches';;
+CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches,pch_defines';;
 			CCACHE_DIR)
 				:;;
 			*)
