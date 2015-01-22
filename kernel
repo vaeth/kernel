@@ -584,7 +584,7 @@ CompileRemote() {
 SetRootPerm() {
 	chmod -- 644 "${1}"
 	permstat=${?}
-	if [ "${UID}" -eq 0 ]
+	if [ "${uid}" -eq 0 ]
 	then	chown -- root:root "${1}" || permstat=${?}
 	fi
 	return ${permstat}
@@ -694,22 +694,22 @@ elif [ -n "${remoteopt:++}" ]
 then	arg='-'
 fi
 
-USER=`id -un`
-UID=`id -u`
-GID=`id -g`
+user=`id -un`
+uid=`id -u`
+gid=`id -g`
 case ${arg} in
 -)
-	Info "${0##*/}: called as ${USER} (${UID}:${GID})"
-	[ "${UID}" -eq 0 ] && [ "${GID}" -eq 0 ] && [ "${USER}" = 'root' ] || {
+	Info "${0##*/}: called as ${user} (${uid}:${gid})"
+	[ "${uid}" -eq 0 ] && [ "${gid}" -eq 0 ] && [ "${user}" = 'root' ] || {
 		Warning 'this script should be called as root.'
 	}
 	time_begin=`date '+%s' 2>/dev/null` || time_begin=
 	PrepAndRemote
-	Info "Remote script finished; back to ${USER} (${UID}:${GID})"
+	Info "Remote script finished; back to ${user} (${uid}:${gid})"
 	${rootinstalls} && InstallAsRoot
 	FinishText;;
 remote)
-	Info "${0##*/}: called remotely as ${USER} (${UID}:${GID})"
+	Info "${0##*/}: called remotely as ${user} (${uid}:${gid})"
 	while case ${1:-+} in
 	*'='*)
 		exportvar=${1%%=*}
