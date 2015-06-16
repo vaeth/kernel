@@ -2,27 +2,27 @@
 
 set -f
 
-fullcmd=`command -v -- "${0}"`
-fullpath=`readlink -f -- "${fullcmd}" 2>/dev/null` || case ${fullcmd} in
-/*)	fullpath=${fullcmd};;
+fullcmd=`command -v -- "$0"`
+fullpath=`readlink -f -- "$fullcmd" 2>/dev/null` || case $fullcmd in
+/*)	fullpath=$fullcmd;;
 *)	fullpath=${PWD%/}/${fullcmd#./};;
 esac
 
 if command -v eix-functions.sh >/dev/null 2>&1
 then	. eix-functions.sh
 else	ReadVar() {
-	read_var=`portageq envvar ${2}` || read_var=
-	eval ${1}=\${read_var}
+	read_var=`portageq envvar $2` || read_var=
+	eval $1=\$read_var
 	[ -n "${read_var:++}" ]
 }
 fi
 Push() {
 	. push.sh
-	Push "${@}"
+	Push "$@"
 }
 
 Exit() {
-	exit ${1}
+	exit $1
 }
 
 magicquit=130
@@ -31,78 +31,78 @@ Title() {
 Title() {
 :
 }
-	case ${titleopt} in
+	case $titleopt in
 	*-*)	return;;
 	esac
 	command -v title >/dev/null 2>&1 || return 0
 Exit() {
-	exitstat=${1:-${?}}
+	exitstat=${1:-$?}
 	trap - EXIT HUP INT TERM
-	[ ${#} -gt 1 ] && exit ${exitstat}
-	if [ ${exitstat} -eq 0 ]
+	[ $# -gt 1 ] && exit $exitstat
+	if [ $exitstat -eq 0 ]
 	then	Title "${0##*/}: finish"
-	elif [ ${exitstat} -eq ${magicforce} ] || [ ${exitstat} -eq ${magicquit} ]
+	elif [ $exitstat -eq $magicforce ] || [ $exitstat -eq $magicquit ]
 	then	Title "${0##*/}: remote finish"
 	else	Title "${0##*/}: failure"
 	fi
-	exit ${exitstat}
+	exit $exitstat
 }
 TitleTrap() {
 	trap : EXIT HUP INT TERM
 	Title "${0##*/} interrupt"
 	trap - EXIT HUP INT TERM
-	exit ${magicquit}
+	exit $magicquit
 }
 	trap TitleTrap EXIT HUP INT TERM
 TitleInit() {
-. title "${@}"
+. title "$@"
 }
-	TitleInit ${titleopt:+"-${titleopt}"} -- "${@}"
+	TitleInit ${titleopt:+"-$titleopt"} -- "$@"
 }
 
 TitleInfo() {
-	Title "${0##*/}: ${*}"
+	Title "${0##*/}: $*"
 }
 
 Echo() {
-	printf '%s\n' "${*}"
+	printf '%s\n' "$*"
 }
 
 Echon() {
-	printf '%s' "${*}"
+	printf '%s' "$*"
 }
 
 Warning() {
-	Echo "${0##*/}: warning: ${*}" >&2
+	Echo "${0##*/}: warning: $*" >&2
 }
 
 Info() {
-	printf '### %s\n' "${@}"
+	printf '### %s\n' "$@"
 }
 
 Fatal() {
-	Echo "${0##*/}: ${*}" >&2
+	Echo "${0##*/}: $*" >&2
 	Exit 2
 }
 
 Quote() {
-	Push -c q "${@}"
-	Echo "# ${q}"
+	Push -c q "$@"
+	Echo "# $q"
 }
 
 QuoteExec() {
-	Quote "${@}"
-	"${@}"
+	Quote "$@"
+	"$@"
 }
 
 MyDiff() {
 	TitleInfo 'diff'
-	diffa="${KBUILD_OUTPUT}/.config.old"
-	diffb="${KBUILD_OUTPUT}/.config"
-	test -f "${diffa}" && test -f "${diffb}" || return 0
+	diffa=$KBUILD_OUTPUT/.config.old
+	diffb=$KBUILD_OUTPUT/.config
+	test -f "$diffa" && test -f "$diffb" || return 0
 	diffd=diff
 	command -v colordiff >/dev/null 2>&1 && diffd=colordiff
-	QuoteExec "${diffd}" -- "${diffa}" "${diffb}"
+	QuoteExec "$diffd" -- "$diffa" "$diffb"
 }
 
 Usage() {
@@ -149,17 +149,17 @@ The following options are available:
 
 remoteopt=
 PushOpt() {
-	Push remoteopt "${@}"
+	Push remoteopt "$@"
 }
 
 makeopts=
 PushMake() {
-	Push makeopts "${@}"
+	Push makeopts "$@"
 }
 
 exportpass=
 PushExport() {
-	Push exportpass "${@}"
+	Push exportpass "$@"
 }
 
 forceflag=false
@@ -173,8 +173,8 @@ rootinstalls=:
 titleopt=
 OPTIND=1
 while getopts 'fpnmgxNcCxXT:a:u:o:O:h?' opt
-do	PushOpt "-${opt}"
-	case ${opt} in
+do	PushOpt "-$opt"
+	case $opt in
 	f)	forceflag=:;;
 	p)	oldconfig=:;;
 	n)	configtype='nconfig';;
@@ -186,59 +186,59 @@ do	PushOpt "-${opt}"
 	C)	useccache=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
-	T)	PushOpt "${OPTARG}"
-		titleopt=${titleopt}${OPTARG};;
-	a)	PushOpt "${OPTARG}"
-		PushMake "${OPTARG}";;
-	u)	PushOpt "${OPTARG}"
-		remoteuser=${OPTARG};;
-	o)	PushOpt "${OPTARG}"
-		prefixdir=${OPTARG}
+	T)	PushOpt "$OPTARG"
+		titleopt=$titleopt$OPTARG;;
+	a)	PushOpt "$OPTARG"
+		PushMake "$OPTARG";;
+	u)	PushOpt "$OPTARG"
+		remoteuser=$OPTARG;;
+	o)	PushOpt "$OPTARG"
+		prefixdir=$OPTARG
 		rootinstalls=false;;
-	O)	PushOpt "${OPTARG}"
-		prefixdir=${OPTARG};;
+	O)	PushOpt "$OPTARG"
+		prefixdir=$OPTARG;;
 	*)	Usage 0;;
 	esac
 done
-shift $(( ${OPTIND} - 1 ))
+shift $(( $OPTIND - 1 ))
 
-case ${titleopt} in
+case $titleopt in
 *[!pPfHsS-]*)
 	Usage;;
 esac
 
 if [ -z "${remoteuser:++}" ]
 then	remoteuser='portage'
-	PushOpt '-u' "${remoteuser}"
+	PushOpt '-u' "$remoteuser"
 fi
 
-if [ -z "${xtransfer:++}" ] && case ${configtype} in
+if [ -z "${xtransfer:++}" ] && case $configtype in
 	[xg]*)	:;;
 	*)	false;;
 	esac
-then	[ "${remoteuser}" = 'portage' ] && xtransfer=: || xtransfer=false
+then	[ "$remoteuser" = 'portage' ] && xtransfer=: || xtransfer=false
 fi
 
 : ${KERNEL_DIR:=/usr/src/linux}
-: ${KBUILD_OUTPUT:=${KERNEL_DIR}}
+: ${KBUILD_OUTPUT:=$KERNEL_DIR}
 
-test -d "${KERNEL_DIR}" || \
+test -d "$KERNEL_DIR" || \
 	Fatal "directory KERNEL_DIR=${KERNEL#DIR} does not exist"
 
 Cd() {
-	case ${1} in
-	/*)	cd "${1}" >/dev/null 2>&1 || Fatal "cd ${1} failed";;
-	*)	cd "./${1#./}" >/dev/null 2>&1 || Fatal "cd ${PWD}/${1#./} failed";;
+	case $1 in
+	/*)	cd "$1" >/dev/null 2>&1 || Fatal "cd $1 failed";;
+	*)	cd "./${1#./}" >/dev/null 2>&1 || Fatal "cd $PWD/${1#./} failed";;
 	esac
 }
 
-Cd "${KERNEL_DIR}"
+Cd "$KERNEL_DIR"
 
-if [ "${KERNEL_DIR}" = "${KBUILD_OUTPUT}" ] || \
-	[ "${PWD}" = "${KBUILD_OUTPUT}" ]
+if [ "$KERNEL_DIR" = "$KBUILD_OUTPUT" ] || \
+	[ "$PWD" = "$KBUILD_OUTPUT" ]
 then	Fatal "This script should only be used if KBUILD_OUTPUT is set in the
 environment and is a different directory than KERNEL_DIR, i.e. it must *not* be
-	${KERNEL_DIR}
+	$KERNEL_DIR
 Note that setting KBUILD_OUTPUT should be done in the environment of root or
 alternatively in /etc/make.conf (or /etc/portage/make.conf) so that portage
 will honour it later when emerging kernel-related ebuilds."
@@ -249,113 +249,113 @@ for ccache_var in DIR COMPRESS NOCOMPRESS COMPRESSLEVEL NLEVELS EXTENSION \
 	COMPILERCHECK DIRECT NODIRECT DISABLE EXTRAFILES HARDLINK HASHDIR \
 	LOGFILE STATS NOSTATS PATH PREFIX READONLY RECACHE CPP2 SLOPPINESS \
 	TEMPDIR UMASK UNIFY NOUNIFY SIZE
-do	ccache_vars=${ccache_vars}' CCACHE_'${ccache_var}
+do	ccache_vars=$ccache_vars' CCACHE_'$ccache_var
 done
 
 BackSpaceArg() {
 	[ -z "${1:++}" ] && return
-	bckspc=${1}
+	bckspc=$1
 	bckspt=
 	while [ -n "${bckspc:++}" ]
-	do	bckspt=${bckspt}'\b \b'
+	do	bckspt=$bckspt'\b \b'
 		bckspc=${bckspc%?}
 	done
-	printf "${bckspt}"
+	printf "$bckspt"
 }
 
 quitstatus=0
 Ask() {
-	if ${forceflag}
-	then	Echo "${*}."
+	if $forceflag
+	then	Echo "$*."
 		return 0
 	fi
 	Title '???'
 	askt='(Yes/No/Rest/Quit) '
-	Echon "${*}? ${askt}"
+	Echon "$*? $askt"
 	while :
 	do	oldtty=`stty -g`
 		stty -icanon -echo
 		askkey=`dd count=1 bs=1 2>/dev/null`
-		stty ${oldtty}
-		case ${askkey} in
-		[yY]*)	BackSpaceArg "${askt}"
+		stty $oldtty
+		case $askkey in
+		[yY]*)	BackSpaceArg "$askt"
 			Echo 'Yes'
 			return 0;;
-		[nN]*)	BackSpaceArg "${askt}"
+		[nN]*)	BackSpaceArg "$askt"
 			Echo 'No'
 			return 1;;
-		[rR]*)	BackSpaceArg "${askt}"
+		[rR]*)	BackSpaceArg "$askt"
 			Echo 'Rest'
 			forceflag=:
 			return 0;;
-		[qQ]*)	BackSpaceArg "${askt}"
+		[qQ]*)	BackSpaceArg "$askt"
 			Echo 'Quit'
-			Exit ${quitstatus};;
+			Exit $quitstatus;;
 		esac
 	done
 }
 
 read_features=:
 FeaturesHave() {
-	if ${read_features}
+	if $read_features
 	then	ReadVar FEATURES FEATURES
 		read_features=false
 	fi
 	feature_have=1
-	for feature in ${FEATURES}
-	do	if [ "${feature}" = "${1}" ]
+	for feature in $FEATURES
+	do	if [ "$feature" = "$1" ]
 		then	feature_have=0
-		elif [ "${feature}" = "-${1}" ]
+		elif [ "$feature" = "-$1" ]
 		then	feature_have=1
 		fi
 	done
-	return ${feature_have}
+	return $feature_have
 }
 
 # The preparation parts which have to be done as root:
 
 PrepAndRemote() {
-	remoteUID=`id -u "${remoteuser}"` || Fatal "id -u ${remoteuser} failed"
-	remoteGID=`id -g "${remoteuser}"` || Fatal "id -g ${remoteuser} failed"
-	Info "Compiling scheduled for ${remoteuser} (${remoteUID}:${remoteGID})."
-	if ${forceflag}
+	remoteUID=`id -u "$remoteuser"` || Fatal "id -u $remoteuser failed"
+	remoteGID=`id -g "$remoteuser"` || Fatal "id -g $remoteuser failed"
+	Info "Compiling scheduled for $remoteuser ($remoteUID:$remoteGID)."
+	if $forceflag
 	then	passforce=false
 	else	passforce=:
 		Info '' 'You will get asked interactively at each step.' \
 	'To avoid this, use option -f or reply on a question with r(est).' ''
 	fi
 	clr=:
-	if test -d "${KBUILD_OUTPUT}"
-	then	if Ask "Clean ${KBUILD_OUTPUT} (only partially: keep .config*)"
+	if test -d "$KBUILD_OUTPUT"
+	then	if Ask "Clean $KBUILD_OUTPUT (only partially: keep .config*)"
 		then	(
-				Cd "${KBUILD_OUTPUT}"
+				Cd "$KBUILD_OUTPUT"
 				set +f
 				for i in .* *
-				do	case ${i} in
+				do	case $i in
 					.|..|.config*)	continue;;
 					esac
-					test -r "${i}" || test -h "${i}" || continue
-					rm -rf -- "${i}" || Fatal "cannot remove ${KBUILD_OUTPUT}/${i}"
+					test -r "$i" || test -h "$i" || continue
+					rm -rf -- "$i" || Fatal "cannot remove $KBUILD_OUTPUT/$i"
 				done
-			) || Fatal "cleaning ${KBUILD_OUTPUT} failed"
+			) || Fatal "cleaning $KBUILD_OUTPUT failed"
 			clr=false
-		elif Ask "Remove and recreate ${KBUILD_OUTPUT} completely"
-		then	rm -rf -- "${KBUILD_OUTPUT}" || Fatal "rm -rf ${KBUILD_OUTPUT} failed"
+		elif Ask "Remove and recreate $KBUILD_OUTPUT completely"
+		then	rm -rf -- "$KBUILD_OUTPUT" || Fatal "rm -rf $KBUILD_OUTPUT failed"
 			clr=false
 		fi
 	else	clr=false
 	fi
-	if ! test -d "${KBUILD_OUTPUT}"
-	then	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}" \
-		|| Fatal "cannot create ${KBUILD_OUTPUT}"
+	if ! test -d "$KBUILD_OUTPUT"
+	then	install -d -o "$remoteUID" -g "$remoteGID" -- "$KBUILD_OUTPUT" \
+		|| Fatal "cannot create $KBUILD_OUTPUT"
 	fi
-	if [ -n "${prefixdir:++}" ] && ! test -d "${prefixdir}"
-	then	if ${rootinstalls}
-		then	install -d -- "${prefixdir}"
-		else	install -d -o "${remoteUID}" -g "${remoteGID}" -- "${KBUILD_OUTPUT}"
-		fi || Fatal "cannot create ${prefixdir}"
+	if [ -n "${prefixdir:++}" ] && ! test -d "$prefixdir"
+	then	if $rootinstalls
+		then	install -d -- "$prefixdir"
+		else	install -d -o "$remoteUID" -g "$remoteGID" -- "$KBUILD_OUTPUT"
+		fi || Fatal "cannot create $prefixdir"
 	fi
-	if [ "${xtransfer}" != false ] && ! command -v sudox >/dev/null 2>&1
+	if [ "$xtransfer" != false ] && ! command -v sudox >/dev/null 2>&1
 	then	Info 'Will not transfer X permissions as sudox is not in $PATH'
 		xtransfer=false
 	fi
@@ -363,79 +363,79 @@ PrepAndRemote() {
 	then	xtransfer=:
 	else	xtransfer=false
 	fi
-	if [ "${remoteuser}" = 'portage' ]
+	if [ "$remoteuser" = 'portage' ]
 	then	removex=:
 	else	removex=false
 	fi
-	${forceflag} && ${passforce} && PushOpt '-f'
-	${statusline} || PushOpt '-H'
+	$forceflag && $passforce && PushOpt '-f'
+	$statusline || PushOpt '-H'
 	CalcNice
 	SHELL=`command -v -- sh`
-	Quote export "SHELL=${SHELL}"
+	Quote export "SHELL=$SHELL"
 	export SHELL
 	PushOpt '--'
-	for export_var in ${ccache_vars}
-	do	eval "[ -n \"\${${export_var}++}\" ] && PushExport \"\${export_var}=\${${export_var}}\""
+	for export_var in $ccache_vars
+	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
-	if ${xtransfer}
-	then	eval QuoteExec \${nice} sudox -f -- \"\${remoteuser}\" \"\${fullpath}\" ${remoteopt} remote ${exportpass} -- \${removex} \${clr}
+	if $xtransfer
+	then	eval QuoteExec \$nice sudox -f -- \"\$remoteuser\" \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
 	else	removex=false
-		eval QuoteExec \${nice} sudo -u \"\${remoteuser}\" -H -s -- \"\${fullpath}\" ${remoteopt} remote ${exportpass} -- \${removex} \${clr}
+		eval QuoteExec \$nice sudo -u \"\$remoteuser\" -H -s -- \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
 	fi && return
-	rvalue=${?}
-	[ ${rvalue} -eq ${magicquit} ] && Exit
-	[ ${rvalue} -eq ${magicforce} ] && {
+	rvalue=$?
+	[ $rvalue -eq $magicquit ] && Exit
+	[ $rvalue -eq $magicforce ] && {
 		forceflag=:
 		return
 	}
-	Fatal "calling ${0##*/} as ${remoteuser} failed"
+	Fatal "calling ${0##*/} as $remoteuser failed"
 }
 
 MyMakeTitle() {
 	while :
-	do	case ${1} in
+	do	case $1 in
 		*'='*)
 			shift
 			continue;;
 		esac
-		TitleInfo make "${@}"
+		TitleInfo make "$@"
 		return
 	done
 }
 
 nonfatal=false
 MyMake() {
-	MyMakeTitle "${@}"
-	eval "set -- ${ccopt} ${makeopts} \"\${@}\""
-	QuoteExec make ${MAKEOPTS} -- O="${KBUILD_OUTPUT}" "${@}" && return
-	${nonfatal} && return 1
-	Fatal 'make' "${@}" 'failed'
+	MyMakeTitle "$@"
+	eval "set -- $ccopt $makeopts \"\$@\""
+	QuoteExec make $MAKEOPTS -- O="$KBUILD_OUTPUT" "$@" && return
+	$nonfatal && return 1
+	Fatal 'make' "$@" 'failed'
 }
 
 CalcModuleName() {
 	[ -n "${name:++}" ] && [ -n "${modulename:++}" ] && return
-	name=`readlink -f -- "${KERNEL_DIR}"` || name=${KERNEL_DIR}
+	name=`readlink -f -- "$KERNEL_DIR"` || name=$KERNEL_DIR
 	name=${name##*/}
 	name=${name#*-}
 	[ -n "${name:++}" ] || name='unknown'
-	modulename="${prefixdir}/lib/modules/${name}"
+	modulename=$prefixdir/lib/modules/$name
 }
 
 CalcKernelSystem() {
 	CalcModuleName
-	kernelname="kernel-${name}"
-	systemname="${modulename}/System.map"
+	kernelname=kernel-$name
+	systemname=$modulename/System.map
 }
 
 ReadCcacheConf() {
-	for ccache_var in ${ccache_vars}
-	do	ReadVar ${ccache_var} ${ccache_var}
-		case ${ccache_var} in
+	for ccache_var in $ccache_vars
+	do	ReadVar $ccache_var $ccache_var
+		case $ccache_var in
 		CCACHE_SIZE)
 			continue;;
 		esac
-		if eval "[ -z \"\${${ccache_var}++}\" ]"
-		then	case ${ccache_var} in
+		if eval "[ -z \"\${$ccache_var++}\" ]"
+		then	case $ccache_var in
 			CCACHE_SLOPPINESS)
 CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches,pch_defines';;
 			CCACHE_DIR)
@@ -444,29 +444,29 @@ CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,
 				continue;;
 			esac
 		fi
-		if eval "[ -z \"\${${ccache_var}:++}\" ]"
-		then	case ${ccache_var} in
+		if eval "[ -z \"\${$ccache_var:++}\" ]"
+		then	case $ccache_var in
 			CCACHE_DIR)
 				ReadVar CCACHE_DIR PORTAGE_TMPDIR
-				CCACHE_DIR="${CCACHE_DIR:-/var/tmp}/ccache";;
+				CCACHE_DIR=${CCACHE_DIR:-/var/tmp}/ccache;;
 			*)
-				Quote unset ${ccache_var}
-				eval "unset ${ccache_var}"
+				Quote unset $ccache_var
+				eval "unset $ccache_var"
 				continue;;
 			esac
 		fi
-		eval "Quote export \"\${ccache_var}=\${${ccache_var}}\"
-export ${ccache_var}"
+		eval "Quote export \"\$ccache_var=\$$ccache_var\"
+export $ccache_var"
 	done
 	CCACHE_BASEDIR=${KERNEL_DIR%/*}
-	Quote export "CCACHE_BASEDIR=${CCACHE_BASEDIR}"
+	Quote export "CCACHE_BASEDIR=$CCACHE_BASEDIR"
 	export CCACHE_BASEDIR
 }
 
 CalcCcache() {
 	ccopt=
 	${useccache:-:} || return 0
-	if [ "${remoteuser}" = 'portage' ]
+	if [ "$remoteuser" = 'portage' ]
 	then	if [ -z "${useccache:++}" ]
 		then	if FeaturesHave 'ccache'
 			then	! Ask "Use ccache"
@@ -481,12 +481,12 @@ CalcCcache() {
 	else	${useccache:-false} || return 0
 	fi
 	#Push ccopt 'CC=ccache gcc'
-	Quote export "PATH=/usr/lib/ccache/bin${PATH:+:}${PATH}"
-	PATH="/usr/lib/ccache/bin${PATH:+:}${PATH}"
+	Quote export "PATH=/usr/lib/ccache/bin${PATH:+:}$PATH"
+	PATH=/usr/lib/ccache/bin${PATH:+:}$PATH
 	export PATH
 	if [ -n "${CCACHE_SIZE:++}" ]
-	then	Quote ccache -M "${CCACHE_SIZE}"
-		ccache -M "${CCACHE_SIZE}" >/dev/null 2>&1
+	then	Quote ccache -M "$CCACHE_SIZE"
+		ccache -M "$CCACHE_SIZE" >/dev/null 2>&1
 	fi
 }
 
@@ -495,65 +495,65 @@ CalcNice() {
 	then	: ${NICENESS:=0}
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
-	case ${NICENESS} in
+	case $NICENESS in
 	*[!0-9]*)	NICENESS=;;
 	esac
 	: ${NICENESS:=9}
-	if [ "${NICENESS}" -le 0 ] || ! [ "`nice`" -eq 0 ]
+	if [ "$NICENESS" -le 0 ] || ! [ "`nice`" -eq 0 ]
 	then	nice=
-	else	nice="nice -n ${NICENESS} --"
+	else	nice="nice -n $NICENESS --"
 	fi
 	ReadVar PORTAGE_IONICE_COMMAND PORTAGE_IONICE_COMMAND
 	: ${PORTAGE_IONICE_COMMAND=ionice -c 3}
-	for niceadd in ${PORTAGE_IONICE_COMMAND} --
-	do	case ${niceadd} in
+	for niceadd in $PORTAGE_IONICE_COMMAND --
+	do	case $niceadd in
 		-p|*PID*)
 			continue;;
 		--*)
 			:;;
 		-*p*)
-			nice=${nice}${nice:+ }${niceadd%p*}${niceadd#*p}
+			nice=$nice${nice:+ }${niceadd%p*}${niceadd#*p}
 			false;;
-		esac && nice=${nice}${nice:+ }${niceadd}
-		[ "${niceadd}" = '--' ] && break
+		esac && nice=$nice${nice:+ }$niceadd
+		[ "$niceadd" = '--' ] && break
 	done
 }
 
 CalcMakeopts() {
 	[ -n "${MAKEOPTS++}" ] && return
 	ReadVar mkopts MAKEOPTS
-	for mkopt in ${mkopts}
-	do	case ${mkopt} in
+	for mkopt in $mkopts
+	do	case $mkopt in
 		V=*|--no-print-directory|--output-sync*|-O*)
 			continue;;
 		esac
-		MAKEOPTS=${MAKEOPTS}${MAKEOPTS:+ }${mkopt}
+		MAKEOPTS=$MAKEOPTS${MAKEOPTS:+ }$mkopt
 	done
 }
 
 ConfigAskMake() {
-	[ -n "${configtype:++}" ] && [ "${configtype}" != "${1}" ] && return
-	Ask "${2}" && {
-		MyMake "${1}" && configtype=${1}
+	[ -n "${configtype:++}" ] && [ "$configtype" != "$1" ] && return
+	Ask "$2" && {
+		MyMake "$1" && configtype=$1
 		MyDiff
 	}
 }
 
 CompileRemote() {
 	TitleInfo 'prepare'
-	removex=${1}
+	removex=$1
 	shift
-	clr=${1}
+	clr=$1
 
 	CalcCcache
 	CalcMakeopts
 
 	Info "`gcc --version | head -n 1`"
 
-	${clr} && Ask 'Use make mrproper (usually you do not want this)' && \
+	$clr && Ask 'Use make mrproper (usually you do not want this)' && \
 		MyMake mrproper
 
-	${oldconfig} || \
+	$oldconfig || \
 		Ask 'Use make oldconfig (usually you do not want this)' && {
 		MyMake oldconfig
 		MyDiff
@@ -566,13 +566,13 @@ CompileRemote() {
 	ConfigAskMake gconfig 'Use make gconfig (this is ugly)'
 	nonfatal=false
 
-	if ${removex}
-	then	rm -f -- "${HOME}/.Xauthority"
-		[ "${remoteuser}" = 'portage' ] && rm -rf -- "${HOME}/.qt"
+	if $removex
+	then	rm -f -- "$HOME/.Xauthority"
+		[ "$remoteuser" = 'portage' ] && rm -rf -- "$HOME/.qt"
 	fi
-	test -f "${KBUILD_OUTPUT}/.config.old" && \
-		Ask "remove ${KBUILD_OUTPUT}/.config.old" && \
-		rm -f -- "${KBUILD_OUTPUT}/.config.old"
+	test -f "$KBUILD_OUTPUT/.config.old" && \
+		Ask "remove $KBUILD_OUTPUT/.config.old" && \
+		rm -f -- "$KBUILD_OUTPUT/.config.old"
 
 	if Ask 'Compile both, kernel and modules'
 	then	MyMake
@@ -582,53 +582,53 @@ CompileRemote() {
 }
 
 SetRootPerm() {
-	chmod -- 644 "${1}"
-	permstat=${?}
-	if [ "${uid}" -eq 0 ]
-	then	chown -- root:root "${1}" || permstat=${?}
+	chmod -- 644 "$1"
+	permstat=$?
+	if [ "$uid" -eq 0 ]
+	then	chown -- root:root "$1" || permstat=$?
 	fi
-	return ${permstat}
+	return $permstat
 }
 
 FixModules() {
 	CalcModuleName
-	rm -f -- "${modulename}/build" "${modulename}/source"
+	rm -f -- "$modulename/build" "$modulename/source"
 }
 
 MoveKernel() {
-	CalcKernelSystem "${1}"
-	if Ask "Move kernel -> ${1}/${kernelname}"
+	CalcKernelSystem "$1"
+	if Ask "Move kernel -> $1/$kernelname"
 	then	(
 			set +f
 			found=false
-			for i in "${KBUILD_OUTPUT}"/arch/*/boot/bzImage
-			do	test -r "${i}" || continue
-				test -h "${i}" && continue
+			for i in "$KBUILD_OUTPUT"/arch/*/boot/bzImage
+			do	test -r "$i" || continue
+				test -h "$i" && continue
 				found=:
-				mv -- "${i}" "${1}/${kernelname}" \
-					&& SetRootPerm "${1}/${kernelname}" \
+				mv -- "$i" "$1/$kernelname" \
+					&& SetRootPerm "$1/$kernelname" \
 					&& break
-				Warning "moving ${i} failed"
+				Warning "moving $i failed"
 			done
-			${found} || Warning \
-				"${KBUILD_OUTPUT}/arch/*/boot/bzImage not found"
+			$found || Warning \
+				"$KBUILD_OUTPUT/arch/*/boot/bzImage not found"
 		)
-		test -f "${KBUILD_OUTPUT}/vmlinux" && rm -f -- "${KBUILD_OUTPUT}/vmlinux"
+		test -f "$KBUILD_OUTPUT/vmlinux" && rm -f -- "$KBUILD_OUTPUT/vmlinux"
 	fi
-	Ask "Copy System.map -> ${systemname}" || return 0
-	systemori="${KBUILD_OUTPUT}/System.map"
-	cp -- "${systemori}" "${systemname}" \
-		&& touch -r "${systemori}" -- "${systemname}" \
-		&& SetRootPerm "${systemname}" \
+	Ask "Copy System.map -> $systemname" || return 0
+	systemori=$KBUILD_OUTPUT/System.map
+	cp -- "$systemori" "$systemname" \
+		&& touch -r "$systemori" -- "$systemname" \
+		&& SetRootPerm "$systemname" \
 		|| Warning 'copying System.map failed'
 }
 
 InstallIntoPrefix() {
-	if Ask "Install modules to ${prefixdir}"
-	then	MyMake INSTALL_MOD_PATH="${prefixdir}" modules_install
+	if Ask "Install modules to $prefixdir"
+	then	MyMake INSTALL_MOD_PATH=$prefixdir modules_install
 		FixModules
 	fi
-	MoveKernel "${prefixdir}"
+	MoveKernel "$prefixdir"
 }
 
 # The installation which has to be done as root:
@@ -643,15 +643,15 @@ InstallAsRoot() {
 		FixModules
 	fi
 	bootname='/boot'
-	Cd "${bootname}"
-	MoveKernel "${bootname}"
+	Cd "$bootname"
+	MoveKernel "$bootname"
 	if test -r 'bzImage' && Ask 'Set both, new and previous symlink'
 	then	mv -- 'bzImage' 'bzImage.previous' \
 			|| Warning "moving old bzImage failed"
-		ln -s -- "${kernelname}" 'bzImage' \
+		ln -s -- "$kernelname" 'bzImage' \
 			|| Fatal "setting new bzImage failed"
 	elif Ask 'Set new symlink'
-	then	ln -sf -- "${kernelname}" 'bzImage' \
+	then	ln -sf -- "$kernelname" 'bzImage' \
 			|| Fatal "setting new bzImage failed"
 	fi
 }
@@ -660,22 +660,22 @@ CalcTime() {
 	result=
 	for calctimea
 	do	calctimeb=${calctimea:-0}
-		[ "${calctimeb}" -gt 9 ] || calctimeb=0${calctimeb}
-		result=${result}${result:+:}${calctimeb}
+		[ "$calctimeb" -gt 9 ] || calctimeb=0$calctimeb
+		result=$result${result:+:}$calctimeb
 	done
 }
 
 FinishText() {
-	if [ "${time_begin}" -gt 99 ]
+	if [ "$time_begin" -gt 99 ]
 	then	time_total=`date '+%s' 2>/dev/null` || time_total=
-		if [ "${time_total}" -gt 99 ]
-		then	time_seconds=$(( ${time_total} - ${time_begin} ))
-			time_minutes=$(( ${time_seconds} / 60 ))
-			CalcTime $(( ${time_seconds} / 3600 )) \
-				$(( ${time_minutes} % 60 )) \
-				$(( ${time_seconds} % 60 ))
+		if [ "$time_total" -gt 99 ]
+		then	time_seconds=$(( $time_total - $time_begin ))
+			time_minutes=$(( $time_seconds / 60 ))
+			CalcTime $(( $time_seconds / 3600 )) \
+				$(( $time_minutes % 60 )) \
+				$(( $time_seconds % 60 ))
 			Echo "
-Total time elapsed: ${result}"
+Total time elapsed: $result"
 		fi
 	fi
 	TitleInfo '@module-rebuild'
@@ -684,11 +684,11 @@ Do not forget to reemerge all packages containing kernel modules:
 
 	emerge -1 @module-rebuild
 '
-	Exit ${?} 0
+	Exit $? 0
 }
 
-if [ ${#} -ne 0 ]
-then	arg=${1}
+if [ $# -ne 0 ]
+then	arg=$1
 	shift
 elif [ -n "${remoteopt:++}" ]
 then	arg='-'
@@ -697,38 +697,38 @@ fi
 user=`id -un`
 uid=`id -u`
 gid=`id -g`
-case ${arg} in
+case $arg in
 -)
-	Info "${0##*/}: called as ${user} (${uid}:${gid})"
-	[ "${uid}" -eq 0 ] && [ "${gid}" -eq 0 ] && [ "${user}" = 'root' ] || {
+	Info "${0##*/}: called as $user ($uid:$gid)"
+	[ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ "$user" = 'root' ] || {
 		Warning 'this script should be called as root.'
 	}
 	time_begin=`date '+%s' 2>/dev/null` || time_begin=
 	PrepAndRemote
-	Info "Remote script finished; back to ${user} (${uid}:${gid})"
-	${rootinstalls} && InstallAsRoot
+	Info "Remote script finished; back to $user ($uid:$gid)"
+	$rootinstalls && InstallAsRoot
 	FinishText;;
 remote)
-	Info "${0##*/}: called remotely as ${user} (${uid}:${gid})"
+	Info "${0##*/}: called remotely as $user ($uid:$gid)"
 	while case ${1:-+} in
 	*'='*)
 		exportvar=${1%%=*}
 		exportvalue=${1#*=}
-		Quote export "${exportvar}=${exportvalue}"
-		eval ${exportvar}=\${exportvalue}
-		export "${exportvar}";;
+		Quote export "$exportvar=$exportvalue"
+		eval $exportvar=\$exportvalue
+		export "$exportvar";;
 	'--')
 		false;;
 	*)
-		Fatal "internal error: argument \"${1}\"";;
+		Fatal "internal error: argument \"$1\"";;
 	esac
 	do	shift
 	done
 	shift
-	quitstatus=${magicquit}
-	CompileRemote "${@}"
-	${rootinstalls} || InstallIntoPrefix
-	${forceflag} && Exit ${magicforce};;
+	quitstatus=$magicquit
+	CompileRemote "$@"
+	$rootinstalls || InstallIntoPrefix
+	$forceflag && Exit $magicforce;;
 *)
 	Usage;;
 esac
