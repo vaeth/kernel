@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-
+set -u
 set -f
 
 fullcmd=`command -v -- "$0"`
@@ -302,7 +302,7 @@ FeaturesHave() {
 		read_features=false
 	fi
 	feature_have=1
-	for feature in $FEATURES
+	for feature in ${FEATURES-}
 	do	if [ "$feature" = "$1" ]
 		then	feature_have=0
 		elif [ "$feature" = "-$1" ]
@@ -407,7 +407,7 @@ nonfatal=false
 MyMake() {
 	MyMakeTitle "$@"
 	eval "set -- $ccopt $makeopts \"\$@\""
-	QuoteExec make $MAKEOPTS -- O="$KBUILD_OUTPUT" "$@" && return
+	QuoteExec make ${MAKEOPTS-} -- O="$KBUILD_OUTPUT" "$@" && return
 	$nonfatal && return 1
 	Fatal 'make' "$@" 'failed'
 }
@@ -495,7 +495,7 @@ CalcNice() {
 	then	: ${NICENESS:=0}
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
-	case $NICENESS in
+	case ${NICENESS-} in
 	*[!0-9]*)	NICENESS=;;
 	esac
 	: ${NICENESS:=9}
@@ -522,12 +522,12 @@ CalcNice() {
 CalcMakeopts() {
 	[ -n "${MAKEOPTS++}" ] && return
 	ReadVar mkopts MAKEOPTS
-	for mkopt in $mkopts
+	for mkopt in ${mkopts-}
 	do	case $mkopt in
 		V=*|--no-print-directory|--output-sync*|-O*)
 			continue;;
 		esac
-		MAKEOPTS=$MAKEOPTS${MAKEOPTS:+ }$mkopt
+		MAKEOPTS=${MAKEOPTS-}${MAKEOPTS:+ }$mkopt
 	done
 }
 
