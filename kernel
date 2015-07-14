@@ -2,6 +2,9 @@
 set -u
 set -f
 
+mkopts=
+ccopt=
+
 fullcmd=`command -v -- "$0"`
 fullpath=`readlink -f -- "$fullcmd" 2>/dev/null` || case $fullcmd in
 /*)	fullpath=$fullcmd;;
