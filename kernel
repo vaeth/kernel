@@ -393,7 +393,7 @@ PrepAndRemote() {
 
 MyMakeTitle() {
 	while :
-	do	case $1 in
+	do	case ${1-} in
 		*'='*)
 			shift
 			continue;;
