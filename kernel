@@ -685,7 +685,7 @@ Total time elapsed: $result"
 	Echo '
 Do not forget to reemerge all packages containing kernel modules:
 
-	emerge -1 @module-rebuild
+	emerge -1O @module-rebuild
 '
 	Exit $? 0
 }
