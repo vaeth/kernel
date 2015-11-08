@@ -273,7 +273,7 @@ Ask() {
 		return 0
 	fi
 	Title '???'
-	askt='(Yes/No/Rest/Quit) '
+	askt='(Yes/No/Rest/Sched/Quit) '
 	Echon "$*? $askt"
 	while :
 	do	oldtty=`stty -g`
@@ -291,6 +291,12 @@ Ask() {
 			Echo 'Rest'
 			forceflag=:
 			return 0;;
+		[sS]*)	BackSpaceArg "$askt"
+			Echo 'Schedule + Rest'
+			forceflag=:
+			schedule queue 'true kernel rest' && return
+			Echo 'schedule failed'
+			Exit 1;;
 		[qQ]*)	BackSpaceArg "$askt"
 			Echo 'Quit'
 			Exit $quitstatus;;
