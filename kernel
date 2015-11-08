@@ -266,17 +266,21 @@ BackSpaceArg() {
 	printf "$bckspt"
 }
 
+schedule=
+command -v schedule >/dev/null 2>&1 && schedule=:
+
 quitstatus=0
+oldtty=
 Ask() {
 	if $forceflag
 	then	Echo "$*."
 		return 0
 	fi
 	Title '???'
-	askt='(Yes/No/Rest/Sched/Quit) '
+	askt="(Yes/No/Rest${schedule:+/Sched}/Quit) "
 	Echon "$*? $askt"
 	while :
-	do	oldtty=`stty -g`
+	do	[ -n "${oldtty:++}" ] || oldtty=`stty -g`
 		stty -icanon -echo
 		askkey=`dd count=1 bs=1 2>/dev/null`
 		stty $oldtty
@@ -291,7 +295,8 @@ Ask() {
 			Echo 'Rest'
 			forceflag=:
 			return 0;;
-		[sS]*)	BackSpaceArg "$askt"
+		[sS]*)	[ -n "$schedule" ] || continue
+			BackSpaceArg "$askt"
 			Echo 'Schedule + Rest'
 			forceflag=:
 			schedule queue 'true kernel rest' && return
