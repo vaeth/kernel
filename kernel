@@ -432,6 +432,11 @@ CalcModuleName() {
 	name=${name##*/}
 	name=${name#*-}
 	[ -n "${name:++}" ] || name='unknown'
+	# We add an "a" and remove it to include possibly trailing newlines
+	localversion=$(sed -n -e 's/^CONFIG_LOCALVERSION="\([^"]*\)"$/\1a/p' -- \
+		"$KBUILD_OUTPUT"/.config 2>/dev/null) || localversion=
+	localversion=${localversion%a}
+	[ -z "$localversion" ] || name=$name$localversion
 	modulename=$prefixdir/lib/modules/$name
 }
 
@@ -667,6 +672,9 @@ InstallAsRoot() {
 	elif Ask 'Set new symlink'
 	then	ln -sf -- "$kernelname" 'bzImage' \
 			|| Fatal "setting new bzImage failed"
+	elif Ask 'Set debug symlink'
+	then	ln -sf -- "$kernelname" 'bzImage.debug' \
+			|| Fatal "setting bzImage.debug failed"
 	fi
 }
 
