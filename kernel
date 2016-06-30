@@ -7,8 +7,10 @@ ccopt=
 
 fullcmd=`command -v -- "$0"`
 fullpath=`readlink -f -- "$fullcmd" 2>/dev/null` || case $fullcmd in
-/*)	fullpath=$fullcmd;;
-*)	fullpath=${PWD%/}/${fullcmd#./};;
+/*)
+	fullpath=$fullcmd;;
+*)
+	fullpath=${PWD%/}/${fullcmd#./};;
 esac
 
 if command -v eix-functions.sh >/dev/null 2>&1
@@ -35,7 +37,8 @@ Title() {
 :
 }
 	case $titleopt in
-	*-*)	return;;
+	*-*)
+		return;;
 	esac
 	command -v title >/dev/null 2>&1 || return 0
 Exit() {
@@ -216,8 +219,10 @@ then	remoteuser='portage'
 fi
 
 if [ -z "${xtransfer:++}" ] && case $configtype in
-	[xg]*)	:;;
-	*)	false;;
+	[xg]*)
+		:;;
+	*)
+		false;;
 	esac
 then	[ "$remoteuser" = 'portage' ] && xtransfer=: || xtransfer=false
 fi
@@ -230,8 +235,10 @@ test -d "$KERNEL_DIR" || \
 
 Cd() {
 	case $1 in
-	/*)	cd "$1" >/dev/null 2>&1 || Fatal "cd $1 failed";;
-	*)	cd "./${1#./}" >/dev/null 2>&1 || Fatal "cd $PWD/${1#./} failed";;
+	/*)
+		cd "$1" >/dev/null 2>&1 || Fatal "cd $1 failed";;
+	*)
+		cd "./${1#./}" >/dev/null 2>&1 || Fatal "cd $PWD/${1#./} failed";;
 	esac
 }
 
@@ -285,24 +292,29 @@ Ask() {
 		askkey=`dd count=1 bs=1 2>/dev/null`
 		stty $oldtty
 		case $askkey in
-		[yY]*)	BackSpaceArg "$askt"
+		[yY]*)
+			BackSpaceArg "$askt"
 			Echo 'Yes'
 			return 0;;
-		[nN]*)	BackSpaceArg "$askt"
+		[nN]*)
+			BackSpaceArg "$askt"
 			Echo 'No'
 			return 1;;
-		[rR]*)	BackSpaceArg "$askt"
+		[rR]*)
+			BackSpaceArg "$askt"
 			Echo 'Rest'
 			forceflag=:
 			return 0;;
-		[sS]*)	[ -n "$schedule" ] || continue
+		[sS]*)
+			[ -n "$schedule" ] || continue
 			BackSpaceArg "$askt"
 			Echo 'Schedule + Rest'
 			forceflag=:
 			schedule queue 'true kernel rest' && return
 			Echo 'schedule failed'
 			Exit 1;;
-		[qQ]*)	BackSpaceArg "$askt"
+		[qQ]*)
+			BackSpaceArg "$askt"
 			Echo 'Quit'
 			Exit $quitstatus;;
 		esac
@@ -346,7 +358,8 @@ PrepAndRemote() {
 				set +f
 				for i in .* *
 				do	case $i in
-					.|..|.config*)	continue;;
+					.|..|.config*)
+						continue;;
 					esac
 					test -r "$i" || test -h "$i" || continue
 					rm -rf -- "$i" || Fatal "cannot remove $KBUILD_OUTPUT/$i"
@@ -429,8 +442,9 @@ MyMake() {
 CalcModuleName() {
 	[ -n "${name:++}" ] && [ -n "${modulename:++}" ] && return
 	name=`readlink -f -- "$KERNEL_DIR"` || name=$KERNEL_DIR
-	name=${name##*/}
-	name=${name#*-}
+	sourcepath=${name%/*}
+	sourcename=${name##*/}
+	name=${sourcename#*-}
 	[ -n "${name:++}" ] || name='unknown'
 	# We add an "a" and remove it to include possibly trailing newlines
 	localversion=$(sed -n -e 's/^CONFIG_LOCALVERSION="\([^"]*\)"$/\1a/p' -- \
@@ -515,7 +529,8 @@ CalcNice() {
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
 	case ${NICENESS-} in
-	*[!0-9]*)	NICENESS=;;
+	*[!0-9]*)
+		NICENESS=;;
 	esac
 	: ${NICENESS:=9}
 	if [ "$NICENESS" -le 0 ] || ! [ "`nice`" -eq 0 ]
@@ -617,21 +632,20 @@ FixModules() {
 MoveKernel() {
 	CalcKernelSystem "$1"
 	if Ask "Move kernel -> $1/$kernelname"
-	then	(
-			set +f
-			found=false
-			for i in "$KBUILD_OUTPUT"/arch/*/boot/bzImage
-			do	test -r "$i" || continue
-				test -h "$i" && continue
-				found=:
-				mv -- "$i" "$1/$kernelname" \
-					&& SetRootPerm "$1/$kernelname" \
-					&& break
-				Warning "moving $i failed"
-			done
-			$found || Warning \
-				"$KBUILD_OUTPUT/arch/*/boot/bzImage not found"
-		)
+	then	found=false
+		set +f
+		for i in "$KBUILD_OUTPUT"/arch/*/boot/bzImage
+		do	test -r "$i" || continue
+			test -h "$i" && continue
+			found=:
+			mv -- "$i" "$1/$kernelname" \
+				&& SetRootPerm "$1/$kernelname" \
+				&& break
+			Warning "moving $i failed"
+		done
+		set -f
+		$found || Warning \
+			"$KBUILD_OUTPUT/arch/*/boot/bzImage not found"
 		test -f "$KBUILD_OUTPUT/vmlinux" && rm -f -- "$KBUILD_OUTPUT/vmlinux"
 	fi
 	Ask "Copy System.map -> $systemname" || return 0
@@ -655,6 +669,7 @@ InstallIntoPrefix() {
 InstallAsRoot() {
 	if [ -n "${prefixdir:++}" ]
 	then	InstallIntoPrefix
+		RemoveOldSources
 		return
 	fi
 	if Ask 'Install modules'
@@ -664,17 +679,63 @@ InstallAsRoot() {
 	bootname='/boot'
 	Cd "$bootname"
 	MoveKernel "$bootname"
-	if test -r 'bzImage' && Ask 'Set both, new and previous symlink'
-	then	mv -- 'bzImage' 'bzImage.previous' \
+	SymlinksRemove
+	RemoveOldSources
+}
+
+SymlinksRemove() {
+	oldname=
+	if test -h bzImage && Ask 'Set both, new and previous symlink'
+	then	! test -h bzImage.previous || \
+			oldname=`readlink -f -- bzImage.previous` || oldname=
+		mv -- bzImage bzImage.previous \
 			|| Warning "moving old bzImage failed"
-		ln -s -- "$kernelname" 'bzImage' \
+		ln -s -- "$kernelname" bzImage \
 			|| Fatal "setting new bzImage failed"
 	elif Ask 'Set new symlink'
-	then	ln -sf -- "$kernelname" 'bzImage' \
+	then	ln -sf -- "$kernelname" bzImage \
 			|| Fatal "setting new bzImage failed"
+		! test -h bzImage.previous || \
+			oldname=`readlink -f -- 'bzImage'` || oldname=
 	elif Ask 'Set debug symlink'
 	then	ln -sf -- "$kernelname" 'bzImage.debug' \
 			|| Fatal "setting bzImage.debug failed"
+		! test -h 'bzImage.debug' || \
+			oldname=`readlink -f -- bzImage.debug` || oldname=
+	fi
+	[ -n "${oldname:++}" ] && [ "$oldname" != "$kernelname" ] \
+		&& test -r "$oldname" || return 0
+	oldext=${oldname##*/kernel-}
+	Push -c oldfiles
+	set +f
+	for oldfile in "$bootname"/*-"$oldext" /lib/modules/"$oldext"
+	do	! test -r "$oldfile" || Push oldfiles "$oldfile"
+	done
+	set -f
+	Push oldfiles || return 0
+	eval "set -- $oldfiles"
+	Info 'Presumably obsolete kernel files/dirs found:' "$@"
+	if Ask 'Remove old files/dirs'
+	then	rm -rf -- "$@"
+	fi
+}
+
+RemoveOldSources() {
+	[ -n "${sourcepath-}" ] && [ -n "${sourcename-}" ] \
+		&& test -d "$sourcepath/$sourcename" || return 0
+	sourcerump=${sourcename%%-*}
+	Push -c oldsources
+	set +f
+	for oldsource in "$sourcepath/$sourcerump"-*
+	do	[ "$oldsource" = "$sourcepath/$sourcename" ] && continue
+		test -d "$oldsource" && Push oldsources "$oldsource"
+	done
+	set -f
+	Push oldsources || return 0
+	eval "set -- $oldsources"
+	Info 'Presumably obsolete kernel source dirs found:' "$@"
+	if Ask 'Remove old kernel sources'
+	then	rm -rf -- "$@"
 	fi
 }
 
