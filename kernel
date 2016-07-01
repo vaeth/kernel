@@ -321,6 +321,34 @@ Ask() {
 	done
 }
 
+CalcTimeHelp() {
+	result=
+	for calctimea
+	do	calctimeb=${calctimea:-0}
+		[ "$calctimeb" -gt 9 ] || calctimeb=0$calctimeb
+		result=$result${result:+:}$calctimeb
+	done
+}
+
+CalcTime() {
+	time_minutes=$(( $1 / 60 ))
+	CalcTimeHelp $(( $1 / 3600 )) \
+		$(( $time_minutes % 60 )) \
+		$(( $1 % 60 ))
+}
+
+CalcTimeDifference() {
+	[ "${1:-0}" -gt 99 ] && CurrDate && [ "$currdate" -ge "$1" ] || return
+	time_difference=$(( $currdate - $1 ))
+	CalcTime "$time_difference"
+}
+
+CurrDate() {
+	Info "`date`"
+	currdate=`date '+%s' 2>/dev/null` || currdate=
+	[ -n "$currdate" ] && [ "$currdate" -gt 99 ]
+}
+
 read_features=:
 FeaturesHave() {
 	if $read_features
@@ -609,9 +637,33 @@ CompileRemote() {
 		rm -f -- "$KBUILD_OUTPUT/.config.old"
 
 	if Ask 'Compile both, kernel and modules'
-	then	MyMake
-	else	Ask 'Compile kernel'  && MyMake bzImage
-		Ask 'Compile modules' && MyMake modules
+	then	CurrDate
+		comp_start=$curr_date
+		MyMake
+		CalcTimeDifference "$comp_start" && \
+			Info '' "Time for kernel+modules compilation: $result" ''
+	else	compiletime=
+		Ask 'Compile kernel'  && {
+			CurrDate
+			comp_start=$curr_date
+			MyMake bzImage
+			CalcTimeDifference "$comp_start" && {
+				compiletime=$time_difference
+				Info '' "Time for kernel compilation: $result" ''
+			}
+		}
+		Ask 'Compile modules' && {
+			CurrDate
+			modules_start=$curr_date
+			MyMake modules
+			CalcTimeDifference "$modules_start" && {
+				Info '' "Time for modules compilation: $result" ''
+				if [ -n "${compiletime:++}" ]
+				then	CalcTime "$(( $compiletime + $time_difference ))"
+					Info '' "Time for kernel+modules compilation: $result" ''
+				fi
+			}
+		}
 	fi
 }
 
@@ -667,60 +719,91 @@ InstallIntoPrefix() {
 # The installation which has to be done as root:
 
 InstallAsRoot() {
+	bootname='/boot'
 	if [ -n "${prefixdir:++}" ]
 	then	InstallIntoPrefix
-		RemoveOldSources
+		CleanupSources
 		return
 	fi
 	if Ask 'Install modules'
 	then	MyMake modules_install
 		FixModules
 	fi
-	bootname='/boot'
 	Cd "$bootname"
 	MoveKernel "$bootname"
-	SymlinksRemove
-	RemoveOldSources
+	SetSymlinks
+	RemoveOldKernels
+	CleanupSources
 }
 
-SymlinksRemove() {
-	oldname=
+CleanupSources() {
+	RemoveOldSources
+	RemoveOldPackages
+}
+
+SetSymlinks() {
+	Cd "$bootname"
 	if test -h bzImage && Ask 'Set both, new and previous symlink'
-	then	! test -h bzImage.previous || \
-			oldname=`readlink -f -- bzImage.previous` || oldname=
-		mv -- bzImage bzImage.previous \
+	then	mv -- bzImage bzImage.previous \
 			|| Warning "moving old bzImage failed"
 		ln -s -- "$kernelname" bzImage \
 			|| Fatal "setting new bzImage failed"
 	elif Ask 'Set new symlink'
 	then	ln -sf -- "$kernelname" bzImage \
 			|| Fatal "setting new bzImage failed"
-		! test -h bzImage.previous || \
-			oldname=`readlink -f -- 'bzImage'` || oldname=
 	elif Ask 'Set debug symlink'
 	then	ln -sf -- "$kernelname" 'bzImage.debug' \
 			|| Fatal "setting bzImage.debug failed"
-		! test -h 'bzImage.debug' || \
-			oldname=`readlink -f -- bzImage.debug` || oldname=
 	fi
-	[ -n "${oldname:++}" ] && [ "$oldname" != "$kernelname" ] \
-		&& test -r "$oldname" || return 0
-	oldext=${oldname##*/kernel-}
-	Push -c oldfiles
+}
+
+RemoveOldKernels() {
+	CalcModuleName
+	set -- "$name"
 	set +f
-	for oldfile in "$bootname"/*-"$oldext" /lib/modules/"$oldext"
-	do	! test -r "$oldfile" || Push oldfiles "$oldfile"
+	for currlink in "$bootname"/*
+	do	test -h "$currlink" && \
+		currext=`readlink -f -- "$currlink"` && \
+		case $currext in
+		*/kernel-*)
+			set -- "$@" "${currext##*/kernel-}";;
+		esac
 	done
 	set -f
-	Push oldfiles || return 0
+	Push -c oldexts
+	set +f
+	for oldfile in "$bootname"/kernel-*
+	do	oldext=${oldfile##*/kernel-}
+		iscurrent=false
+		for currext
+		do	if [ "$oldext" = "$currext" ]
+			then	iscurrent=:
+				break
+			fi
+		done
+		$iscurrent || Push oldexts "$oldext"
+	done
+	set -f
+	eval "set -- $oldexts"
+	[ $# -ne 0 ] || return 0
+	Push -c oldfiles
+	set +f
+	for oldext
+	do	for oldfile in "$bootname"/*-"$oldext" /lib/modules/"$oldext"
+		do	! test -r "$oldfile" || Push oldfiles "$oldfile"
+		done
+	done
+	set -f
 	eval "set -- $oldfiles"
-	Info 'Presumably obsolete kernel files/dirs found:' "$@"
-	if Ask 'Remove old files/dirs'
-	then	rm -rf -- "$@"
+	[ $# -ne 0 ] || return 0
+	Info '' 'Presumably obsolete kernel files/dirs found:' '' "$@"
+	if Ask 'Remove old kernel files/dirs'
+	then	QuoteExec rm -rf -- "$@"
 	fi
 }
 
 RemoveOldSources() {
+	CalcModuleName
 	[ -n "${sourcepath-}" ] && [ -n "${sourcename-}" ] \
 		&& test -d "$sourcepath/$sourcename" || return 0
 	sourcerump=${sourcename%%-*}
@@ -731,42 +814,41 @@ RemoveOldSources() {
 		test -d "$oldsource" && Push oldsources "$oldsource"
 	done
 	set -f
-	Push oldsources || return 0
 	eval "set -- $oldsources"
-	Info 'Presumably obsolete kernel source dirs found:' "$@"
+	[ $# -ne 0 ] || return 0
+	Info '' 'Presumably obsolete kernel source dirs found:' '' "$@"
 	if Ask 'Remove old kernel sources'
-	then	rm -rf -- "$@"
+	then	QuoteExec rm -rf -- "$@"
 	fi
 }
 
-CalcTime() {
-	result=
-	for calctimea
-	do	calctimeb=${calctimea:-0}
-		[ "$calctimeb" -gt 9 ] || calctimeb=0$calctimeb
-		result=$result${result:+:}$calctimeb
+RemoveOldPackages() {
+	CalcModuleName
+	[ -n "${sourcepath-}" ] && [ -n "${sourcename-}" ] || return 0
+	Push -c oldpackages
+	set +f
+	for oldpackage in /var/db/pkg/sys-kernel/*-sources-*
+	do	oldcontent=$oldpackage/CONTENTS
+		test -f "$oldcontent" || continue
+		gentoodir=`sed -ne '/^dir[^\/]*\/[^\/]*\/[^\/]*\/[^\/]*/{s/^dir[^\/]*\(\/.*\)/\1/p;q}' "$oldcontent"` \
+			&& [ -n "$gentoodir" ] || continue
+		test -d "$gentoodir" || Push oldpackages "$oldpackage"
 	done
+	set -f
+	eval "set -- $oldpackages"
+	[ $# -ne 0 ] || return 0
+	Info '' 'Presumably obsolete installed kernel packages found:' '' "$@"
+	if Ask 'Remove obsolete installed kernel packages'
+	then	QuoteExec rm -rf -- "$@"
+	fi
 }
 
 FinishText() {
-	if [ "$time_begin" -gt 99 ]
-	then	time_total=`date '+%s' 2>/dev/null` || time_total=
-		if [ "$time_total" -gt 99 ]
-		then	time_seconds=$(( $time_total - $time_begin ))
-			time_minutes=$(( $time_seconds / 60 ))
-			CalcTime $(( $time_seconds / 3600 )) \
-				$(( $time_minutes % 60 )) \
-				$(( $time_seconds % 60 ))
-			Echo "
-Total time elapsed: $result"
-		fi
-	fi
+	CalcTimeDifference "$time_begin" && \
+		Info '' "Total time elapsed: $result"
 	TitleInfo '@module-rebuild'
-	Echo '
-Do not forget to reemerge all packages containing kernel modules:
-
-	emerge -1O @module-rebuild
-'
+	Info '' 'Do not forget to reemerge all packages containing kernel modules:'
+	Info '' 'emerge -1O @module-rebuild' ''
 	Exit $? 0
 }
 
@@ -786,7 +868,8 @@ case $arg in
 	[ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ "$user" = 'root' ] || {
 		Warning 'this script should be called as root.'
 	}
-	time_begin=`date '+%s' 2>/dev/null` || time_begin=
+	CurrDate
+	time_begin=$currdate
 	PrepAndRemote
 	Info "Remote script finished; back to $user ($uid:$gid)"
 	$rootinstalls && InstallAsRoot
