@@ -638,14 +638,14 @@ CompileRemote() {
 
 	if Ask 'Compile both, kernel and modules'
 	then	CurrDate
-		comp_start=$curr_date
+		comp_start=$currdate
 		MyMake
 		CalcTimeDifference "$comp_start" && \
 			Info '' "Time for kernel+modules compilation: $result" ''
 	else	compiletime=
 		Ask 'Compile kernel'  && {
 			CurrDate
-			comp_start=$curr_date
+			comp_start=$currdate
 			MyMake bzImage
 			CalcTimeDifference "$comp_start" && {
 				compiletime=$time_difference
@@ -654,13 +654,13 @@ CompileRemote() {
 		}
 		Ask 'Compile modules' && {
 			CurrDate
-			modules_start=$curr_date
+			modules_start=$currdate
 			MyMake modules
 			CalcTimeDifference "$modules_start" && {
 				Info '' "Time for modules compilation: $result" ''
 				if [ -n "${compiletime:++}" ]
 				then	CalcTime "$(( $compiletime + $time_difference ))"
-					Info '' "Time for kernel+modules compilation: $result" ''
+					Info "Time for kernel+modules compilation: $result" ''
 				fi
 			}
 		}
