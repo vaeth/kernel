@@ -231,7 +231,7 @@ fi
 : ${KBUILD_OUTPUT:=$KERNEL_DIR}
 
 test -d "$KERNEL_DIR" || \
-	Fatal "directory KERNEL_DIR=${KERNEL#DIR} does not exist"
+	Fatal "directory KERNEL_DIR=${KERNEL_DIR} does not exist"
 
 Cd() {
 	case $1 in
