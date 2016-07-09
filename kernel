@@ -574,9 +574,9 @@ CalcNice() {
 		--*)
 			:;;
 		-*p*)
-			nice=$nice${nice:+ }${niceadd%p*}${niceadd#*p}
+			nice=$nice${nice:+\ }${niceadd%p*}${niceadd#*p}
 			false;;
-		esac && nice=$nice${nice:+ }$niceadd
+		esac && nice=$nice${nice:+\ }$niceadd
 		[ "$niceadd" = '--' ] && break
 	done
 }
@@ -589,7 +589,7 @@ CalcMakeopts() {
 		V=*|--no-print-directory|--output-sync*|-O*)
 			continue;;
 		esac
-		MAKEOPTS=${MAKEOPTS-}${MAKEOPTS:+ }$mkopt
+		MAKEOPTS=${MAKEOPTS-}${MAKEOPTS:+\ }$mkopt
 	done
 }
 
