@@ -155,17 +155,17 @@ The following options are available:
 
 remoteopt=
 PushOpt() {
-	Push remoteopt "$@"
+	Push remoteopt ${1+"$@"}
 }
 
 makeopts=
 PushMake() {
-	Push makeopts "$@"
+	Push makeopts ${1+"$@"}
 }
 
 exportpass=
 PushExport() {
-	Push exportpass "$@"
+	Push exportpass ${1+"$@"}
 }
 
 forceflag=false
@@ -224,7 +224,7 @@ if [ -z "${xtransfer:++}" ] && case $configtype in
 	*)
 		false;;
 	esac
-then	[ "$remoteuser" = 'portage' ] && xtransfer=: || xtransfer=false
+then	[ x"$remoteuser" = x'portage' ] && xtransfer=: || xtransfer=false
 fi
 
 : ${KERNEL_DIR:=/usr/src/linux}
@@ -244,8 +244,8 @@ Cd() {
 
 Cd "$KERNEL_DIR"
 
-if [ "$KERNEL_DIR" = "$KBUILD_OUTPUT" ] || \
-	[ "$PWD" = "$KBUILD_OUTPUT" ]
+if [ x"$KERNEL_DIR" = x"$KBUILD_OUTPUT" ] || \
+	[ x"$PWD" = x"$KBUILD_OUTPUT" ]
 then	Fatal "This script should only be used if KBUILD_OUTPUT is set in the
 environment and is a different directory than KERNEL_DIR, i.e. it must *not* be
 	$KERNEL_DIR
@@ -357,9 +357,9 @@ FeaturesHave() {
 	fi
 	feature_have=1
 	for feature in ${FEATURES-}
-	do	if [ "$feature" = "$1" ]
+	do	if [ x"$feature" = x"$1" ]
 		then	feature_have=0
-		elif [ "$feature" = "-$1" ]
+		elif [ x"$feature" = x"-$1" ]
 		then	feature_have=1
 		fi
 	done
@@ -418,7 +418,7 @@ PrepAndRemote() {
 	then	xtransfer=:
 	else	xtransfer=false
 	fi
-	if [ "$remoteuser" = 'portage' ]
+	if [ x"$remoteuser" = x'portage' ]
 	then	removex=:
 	else	removex=false
 	fi
@@ -453,18 +453,19 @@ MyMakeTitle() {
 			shift
 			continue;;
 		esac
-		TitleInfo make "$@"
+		TitleInfo make ${1+"$@"}
 		return
 	done
 }
 
 nonfatal=false
 MyMake() {
-	MyMakeTitle "$@"
-	eval "set -- $ccopt $makeopts \"\$@\""
-	QuoteExec make ${MAKEOPTS-} -- O="$KBUILD_OUTPUT" "$@" && return
+	MyMakeTitle ${1+"$@"}
+	eval "set -- a $ccopt $makeopts \${1+\"\$@\"}"
+	shift
+	QuoteExec make ${MAKEOPTS-} -- O="$KBUILD_OUTPUT" ${1+"$@"} && return
 	$nonfatal && return 1
-	Fatal 'make' "$@" 'failed'
+	Fatal 'make' ${1+"$@"} 'failed'
 }
 
 CalcModuleName() {
@@ -527,7 +528,7 @@ export $ccache_var"
 CalcCcache() {
 	ccopt=
 	${useccache:-:} || return 0
-	if [ "$remoteuser" = 'portage' ]
+	if [ x"$remoteuser" = x'portage' ]
 	then	if [ -z "${useccache:++}" ]
 		then	if FeaturesHave 'ccache'
 			then	! Ask "Use ccache"
@@ -577,7 +578,7 @@ CalcNice() {
 			nice=$nice${nice:+\ }${niceadd%p*}${niceadd#*p}
 			false;;
 		esac && nice=$nice${nice:+\ }$niceadd
-		[ "$niceadd" = '--' ] && break
+		[ x"$niceadd" = x'--' ] && break
 	done
 }
 
@@ -594,7 +595,7 @@ CalcMakeopts() {
 }
 
 ConfigAskMake() {
-	[ -n "${configtype:++}" ] && [ "$configtype" != "$1" ] && return
+	[ -n "${configtype:++}" ] && [ x"$configtype" != x"$1" ] && return
 	Ask "$2" && {
 		MyMake "$1" && configtype=$1
 		MyDiff
@@ -630,7 +631,7 @@ CompileRemote() {
 
 	if $removex
 	then	rm -f -- "$HOME/.Xauthority"
-		[ "$remoteuser" = 'portage' ] && rm -rf -- "$HOME/.qt"
+		[ x"$remoteuser" = x'portage' ] && rm -rf -- "$HOME/.qt"
 	fi
 	test -f "$KBUILD_OUTPUT/.config.old" && \
 		Ask "remove $KBUILD_OUTPUT/.config.old" && \
@@ -759,14 +760,16 @@ SetSymlinks() {
 
 RemoveOldKernels() {
 	CalcModuleName
-	set -- "$name"
+	set -- a "$name"
+	shift
 	set +f
 	for currlink in "$bootname"/*
 	do	test -h "$currlink" && \
 		currext=`readlink -f -- "$currlink"` && \
 		case $currext in
 		*/kernel-*)
-			set -- "$@" "${currext##*/kernel-}";;
+			set -- a ${1+"$@"} "${currext##*/kernel-}"
+			shift;;
 		esac
 	done
 	set -f
@@ -776,7 +779,7 @@ RemoveOldKernels() {
 	do	oldext=${oldfile##*/kernel-}
 		iscurrent=false
 		for currext
-		do	if [ "$oldext" = "$currext" ]
+		do	if [ x"$oldext" = x"$currext" ]
 			then	iscurrent=:
 				break
 			fi
@@ -784,7 +787,8 @@ RemoveOldKernels() {
 		$iscurrent || Push oldexts "$oldext"
 	done
 	set -f
-	eval "set -- $oldexts"
+	eval "set -- a $oldexts"
+	shift
 	[ $# -ne 0 ] || return 0
 	Push -c oldfiles
 	set +f
@@ -794,7 +798,8 @@ RemoveOldKernels() {
 		done
 	done
 	set -f
-	eval "set -- $oldfiles"
+	eval "set -- a $oldfiles"
+	shift
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete kernel files/dirs found:' '' "$@"
 	if Ask 'Remove old kernel files/dirs'
@@ -810,11 +815,12 @@ RemoveOldSources() {
 	Push -c oldsources
 	set +f
 	for oldsource in "$sourcepath/$sourcerump"-*
-	do	[ "$oldsource" = "$sourcepath/$sourcename" ] && continue
+	do	[ x"$oldsource" = x"$sourcepath/$sourcename" ] && continue
 		test -d "$oldsource" && Push oldsources "$oldsource"
 	done
 	set -f
-	eval "set -- $oldsources"
+	eval "set -- a $oldsources"
+	shift
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete kernel source dirs found:' '' "$@"
 	if Ask 'Remove old kernel sources'
@@ -835,7 +841,8 @@ RemoveOldPackages() {
 		test -d "$gentoodir" || Push oldpackages "$oldpackage"
 	done
 	set -f
-	eval "set -- $oldpackages"
+	eval "set -- a $oldpackages"
+	shift
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete installed kernel packages found:' '' "$@"
 	if Ask 'Remove obsolete installed kernel packages'
@@ -865,7 +872,7 @@ gid=`id -g`
 case $arg in
 -)
 	Info "${0##*/}: called as $user ($uid:$gid)"
-	[ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ "$user" = 'root' ] || {
+	[ "$uid" -eq 0 ] && [ "$gid" -eq 0 ] && [ x"$user" = x'root' ] || {
 		Warning 'this script should be called as root.'
 	}
 	CurrDate
@@ -892,7 +899,7 @@ remote)
 	done
 	shift
 	quitstatus=$magicquit
-	CompileRemote "$@"
+	CompileRemote ${1+"$@"}
 	$rootinstalls || InstallIntoPrefix
 	$forceflag && Exit $magicforce;;
 *)
