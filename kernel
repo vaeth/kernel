@@ -27,7 +27,7 @@ Push() {
 }
 
 Exit() {
-	exit $1
+	exit ${1-}
 }
 
 magicquit=130
@@ -244,8 +244,7 @@ Cd() {
 
 Cd "$KERNEL_DIR"
 
-if [ x"$KERNEL_DIR" = x"$KBUILD_OUTPUT" ] || \
-	[ x"$PWD" = x"$KBUILD_OUTPUT" ]
+if [ x"$KERNEL_DIR" = x"$KBUILD_OUTPUT" ] || [ x"${PWD-}" = x"$KBUILD_OUTPUT" ]
 then	Fatal "This script should only be used if KBUILD_OUTPUT is set in the
 environment and is a different directory than KERNEL_DIR, i.e. it must *not* be
 	$KERNEL_DIR
@@ -381,28 +380,37 @@ PrepAndRemote() {
 	clr=:
 	if test -d "$KBUILD_OUTPUT"
 	then	if Ask "Clean $KBUILD_OUTPUT (only partially: keep .config*)"
-		then	(
-				Cd "$KBUILD_OUTPUT"
-				set +f
-				for i in .* *
-				do	case $i in
-					.|..|.config*)
+		then	set -- a
+			shift
+			set +f
+			for preprem in "$KBUILD_OUTPUT"/* "$KBUILD_OUTPUT"/.*
+			do	case ${preprem##*/} in
+				''|.|..|.config*)
+					continue;;
+				'*'|'.*')
+					test -f "$preprem" || \
+						test -d "$preprem" || \
 						continue;;
-					esac
-					test -r "$i" || test -h "$i" || continue
-					rm -rf -- "$i" || Fatal "cannot remove $KBUILD_OUTPUT/$i"
-				done
-			) || Fatal "cleaning $KBUILD_OUTPUT failed"
+				esac
+				set -- "$@" "$preprem"
+			done
+			set -f
+			if [ $# -eq 0 ]
+			then	Info 'directory is already clean'
+			else	SafeRemove 50 "$@" || \
+					Fatal 'cleaning directory failed'
+			fi
 			clr=false
 		elif Ask "Remove and recreate $KBUILD_OUTPUT completely"
-		then	rm -rf -- "$KBUILD_OUTPUT" || Fatal "rm -rf $KBUILD_OUTPUT failed"
+		then	SafeRemove 1 "$KBUILD_OUTPUT" || \
+				Fatal 'cleaning directory failed'
 			clr=false
 		fi
 	else	clr=false
 	fi
 	if ! test -d "$KBUILD_OUTPUT"
 	then	install -d -o "$remoteUID" -g "$remoteGID" -- "$KBUILD_OUTPUT" \
-		|| Fatal "cannot create $KBUILD_OUTPUT"
+			|| Fatal "cannot create $KBUILD_OUTPUT"
 	fi
 	if [ -n "${prefixdir:++}" ] && ! test -d "$prefixdir"
 	then	if $rootinstalls
@@ -803,7 +811,7 @@ RemoveOldKernels() {
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete kernel files/dirs found:' '' "$@"
 	if Ask 'Remove old kernel files/dirs'
-	then	QuoteExec rm -rf -- "$@"
+	then	SafeRemove 10 "$@"
 	fi
 }
 
@@ -824,7 +832,7 @@ RemoveOldSources() {
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete kernel source dirs found:' '' "$@"
 	if Ask 'Remove old kernel sources'
-	then	QuoteExec rm -rf -- "$@"
+	then	SafeRemove 10 "$@"
 	fi
 }
 
@@ -846,7 +854,57 @@ RemoveOldPackages() {
 	[ $# -ne 0 ] || return 0
 	Info '' 'Presumably obsolete installed kernel packages found:' '' "$@"
 	if Ask 'Remove obsolete installed kernel packages'
-	then	QuoteExec rm -rf -- "$@"
+	then	SafeRemove 10 "$@"
+	fi
+}
+
+SafeToRemove() {
+	case ${1-x} in
+	'')
+		:;;
+	*[!0-9]*)
+		Fatal "internal error: wrong arg for SafeRemove: ${1}";;
+	*)
+		if [ $# -gt $1 ]
+		then	Warning "removing more than $1 files/dirs.
+This number is suspiciously large: skipping removal for safety reasons"
+			return 1
+		fi;;
+	esac
+	shift
+	for saveremove
+	do	if test -f "$saveremove"
+		then	case $saveremove in
+			/[!/]*/[!/]*)
+				continue;;
+			esac
+			Warning "not in an absolute subdirectory: $saveremove
+This is suspicious: skipping removal for safety reasons"
+			return 1
+		fi
+		if ! test -d "$saveremove"
+		then	Warning "unusual file type: $saveremove
+This is suspicious: skipping removal for safety reasons"
+			return 1
+		fi
+		case $saveremove in
+		/[!/]*/[!/]*/[!/]*)
+			continue;;
+		esac
+		Warning "dir path length <3: $saveremove
+This number is suspiciously small: skipping for safety reasons"
+		return 1
+	done
+	return 0
+}
+
+SafeRemove() {
+	if SafeToRemove "$@"
+	then	shift
+		QuoteExec rm -rf -- "$@"
+	else	shift
+		Quote skipping rm -rf -- "$@"
+		return 1
 	fi
 }
 
