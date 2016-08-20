@@ -873,7 +873,7 @@ This number is suspiciously large: skipping removal for safety reasons"
 	esac
 	shift
 	for saveremove
-	do	if test -f "$saveremove"
+	do	if test -f "$saveremove" || test -h "$saveremove"
 		then	case $saveremove in
 			/[!/]*/[!/]*)
 				continue;;
