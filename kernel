@@ -178,8 +178,9 @@ prefixdir=
 rootinstalls=:
 titleopt=
 OPTIND=1
-while getopts 'fpnmgxNcCxXT:a:u:o:O:h?' opt
-do	PushOpt "-$opt"
+while getopts 'fpnmgxNcCxXT:a:u:o:O:h' opt
+do	[ x"$opt" != x'?' ] || Exit 1
+	PushOpt "-$opt"
 	case $opt in
 	f)	forceflag=:;;
 	p)	oldconfig=:;;
@@ -566,7 +567,7 @@ CalcNice() {
 	else	ReadVar NICENESS PORTAGE_NICENESS
 	fi
 	case ${NICENESS-} in
-	*[!0-9]*)
+	*[!0123456789]*)
 		NICENESS=;;
 	esac
 	: ${NICENESS:=9}
@@ -862,8 +863,8 @@ SafeToRemove() {
 	case ${1-x} in
 	'')
 		:;;
-	*[!0-9]*)
-		Fatal "internal error: wrong arg for SafeRemove: ${1}";;
+	*[!0123456789]*)
+		Fatal "internal error: wrong arg for SafeToRemove: $1";;
 	*)
 		if [ $# -gt $1 ]
 		then	Warning "removing more than $1 files/dirs.

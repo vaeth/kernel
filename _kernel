@@ -1,6 +1,6 @@
 #compdef kernel
 _arguments -s -S -A '-*' : \
-'(-)'{'-h','-\\?'}'[help]' \
+'(-)-h[help]' \
 '-f[force always yes]' \
 '-p[force oldconfig (with -f)]' \
 '-n[ask only/force nconfig]' \
