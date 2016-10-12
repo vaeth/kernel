@@ -127,6 +127,11 @@ The following options are available:
   -N       use no config  (resp. do not ask for *config)
 
   -u USER  compile with permissions of USER (default for USER is portage).
+  -U umask Use umask and CCACHE_UMASK to (recommended are 077 or 007; default
+           is 077). Use value -(-U-) or the empty string to avoid this feature.
+           Note that kernel ASLR is rather pointless unless .config, kernel,
+           and all modules are hidden, see e.g.
+           https://forums.grsecurity.net/viewtopic.php?f=7&t=3367
 
   -Y       transfer X data using sudox (default with USER=portage and -x|-g)
   -X       do not transfer X data
@@ -177,8 +182,9 @@ remoteuser=
 prefixdir=
 rootinstalls=:
 titleopt=
+setumask=077
 OPTIND=1
-while getopts 'fpnmgxNcCxXT:a:u:o:O:h' opt
+while getopts 'fpnmgxNcCxXT:a:u:U:o:O:h' opt
 do	[ x"$opt" != x'?' ] || Exit 1
 	PushOpt "-$opt"
 	case $opt in
@@ -199,6 +205,8 @@ do	[ x"$opt" != x'?' ] || Exit 1
 		PushMake "$OPTARG";;
 	u)	PushOpt "$OPTARG"
 		remoteuser=$OPTARG;;
+	U)	PushOpt "$OPTARG"
+		setumask=$OPTARG;;
 	o)	PushOpt "$OPTARG"
 		prefixdir=$OPTARG
 		rootinstalls=false;;
@@ -218,6 +226,16 @@ if [ -z "${remoteuser:++}" ]
 then	remoteuser='portage'
 	PushOpt '-u' "$remoteuser"
 fi
+
+[ x"${setumask:--}" != x'-' ] || setumask=
+[ -z "${setumask:++}" ] || {
+	case $setumask in
+	*[!01234567]*)
+		Fatal 'illegal umask';;
+	esac
+	Quote umask "$setumask"
+	umask $setumask
+}
 
 if [ -z "${xtransfer:++}" ] && case $configtype in
 	[xg]*)
@@ -500,11 +518,13 @@ CalcKernelSystem() {
 
 ReadCcacheConf() {
 	for ccache_var in $ccache_vars
-	do	ReadVar $ccache_var $ccache_var
-		case $ccache_var in
+	do	case $ccache_var in
 		CCACHE_SIZE)
 			continue;;
+		CCACHE_UMASK)
+			[ -z "${setumask:++}" ] || continue;;
 		esac
+		ReadVar $ccache_var $ccache_var
 		if eval "[ -z \"\${$ccache_var++}\" ]"
 		then	case $ccache_var in
 			CCACHE_SLOPPINESS)
@@ -532,6 +552,11 @@ export $ccache_var"
 	CCACHE_BASEDIR=${KERNEL_DIR%/*}
 	Quote export "CCACHE_BASEDIR=$CCACHE_BASEDIR"
 	export CCACHE_BASEDIR
+	if [ -n "${setumask:++}" ]
+	then	CCACHE_UMASK=$umask
+		export "CCACHE_UMSK=$CCACHE_UMASK"
+		export CCACHE_UMASK
+	fi
 }
 
 CalcCcache() {
@@ -678,7 +703,6 @@ CompileRemote() {
 }
 
 SetRootPerm() {
-	chmod -- 644 "$1"
 	permstat=$?
 	if [ "$uid" -eq 0 ]
 	then	chown -- root:root "$1" || permstat=$?

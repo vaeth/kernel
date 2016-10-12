@@ -1,0 +1,35 @@
+#compdef kernel
+local curcontext="$curcontext" state state_descr line expl
+typeset -A opt_args
+_arguments -s -S -A '-*' : \
+'(-)-h[help]' \
+'-f[force always yes]' \
+'-p[force oldconfig (with -f)]' \
+'-n[ask only/force nconfig]' \
+'-x[ask only/force xconfig]' \
+'-m[ask only/force menuconfig]' \
+'-g[ask only/force gconfig]' \
+'-N[do not ask/force any *config]' \
+'*-T+[pass specified title option]:title option:_title_opt' \
+'-u+[compile as specified user]:user for kernel compilation:_users' \
+'-U+[use specified umask]:umask:->umask' \
+'-Y[transfer X data (default with -x/-g and USER=portage)]' \
+'-X[do not transfer X data]' \
+'-c[use ccache]' \
+'-C[do not use ccache (default unless USER=portage)]' \
+'*-a+[pass specified arg to make]:argument for make:("CONFIG_DEBUG_SECTION_MISMATCH=y")' \
+'(-O)-o+[install as user with specified prefix path]:prefix to install:_files -/' \
+'(-o)-O+[install as root with specified prefix path]:prefix to install:_files -/'
+local ret=$?
+case $state in
+(umask)
+	local umsk
+	umsk=(
+	'-:Do not modify umask'
+	'077:Create files only user accessible (default)'
+	'007:Create files only user or group accessible'
+	)
+	_describe -t umasks 'umask' umsk
+	ret=$?;;
+esac
+return ret

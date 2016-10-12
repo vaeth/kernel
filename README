@@ -22,8 +22,9 @@ https://github.com/vaeth/sudox in your path.
 If you want that the hard status line is set, also the title script from
 https://github.com/vaeth/runtitle (version >=2.3) is required in your path.
 
-For installation, copy kernel with executable permission in your path.
-To obtain support for zsh completion, copy _kernel to a directory of
-your zsh's $fpath.
+For installation, copy the content of bin/ with executable permission in your
+$PATH (perhaps to /usr/bin). To obtain support for zsh completion, copy the
+content of zsh/ to a directory of your zsh's $fpath (perhaps to
+/usr/share/zsh/site-functions/).
 
 There is also an ebuild in the mv overlay (which is available by layman).
