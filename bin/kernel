@@ -553,7 +553,7 @@ export $ccache_var"
 	Quote export "CCACHE_BASEDIR=$CCACHE_BASEDIR"
 	export CCACHE_BASEDIR
 	if [ -n "${setumask:++}" ]
-	then	CCACHE_UMASK=$umask
+	then	CCACHE_UMASK=$setumask
 		export "CCACHE_UMSK=$CCACHE_UMASK"
 		export CCACHE_UMASK
 	fi
