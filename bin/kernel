@@ -13,7 +13,7 @@ fullpath=`readlink -f -- "$fullcmd" 2>/dev/null` || case $fullcmd in
 	fullpath=${PWD%/}/${fullcmd#./};;
 esac
 
-if command -v eix-functions.sh >/dev/null 2>&1
+if ( . eix-functions.sh ) >/dev/null 2>&1
 then	. eix-functions.sh
 else	ReadVar() {
 	read_var=`portageq envvar $2` || read_var=
