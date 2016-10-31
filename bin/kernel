@@ -13,16 +13,19 @@ fullpath=`readlink -f -- "$fullcmd" 2>/dev/null` || case $fullcmd in
 	fullpath=${PWD%/}/${fullcmd#./};;
 esac
 
-if ( . eix-functions.sh ) >/dev/null 2>&1
-then	. eix-functions.sh
+if eix_functions=`eix-functions.sh 2>/dev/null`
+then	eval "$eix_functions"
 else	ReadVar() {
 	read_var=`portageq envvar $2` || read_var=
 	eval $1=\$read_var
 	[ -n "${read_var:++}" ]
 }
 fi
+
 Push() {
-	. push.sh
+	PushA_=`push.sh 2>/dev/null` || Fatal \
+"push.sh from https://github.com/vaeth/push (v2.0 or newer) required"
+	eval "$PushA_"
 	Push "$@"
 }
 
