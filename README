@@ -20,7 +20,7 @@ environment or in make.conf to the same value so that ebuilds will
 honour that place).
 
 If you want to transfer X data, you should also have the sudox script from
-https://github.com/vaeth/sudox in your path.
+https://github.com/vaeth/sudox (v4.1.0 or better newer) in your path.
 If you want that the hard status line is set, also the title script from
 https://github.com/vaeth/runtitle (version >=2.3) is required in your path.
 

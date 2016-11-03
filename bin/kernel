@@ -463,7 +463,7 @@ PrepAndRemote() {
 	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
 	if $xtransfer
-	then	eval QuoteExec \$nice sudox -f -- \"\$remoteuser\" \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
+	then	eval QuoteExec \$nice sudox -- \"\$remoteuser\" \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
 	else	removex=false
 		eval QuoteExec \$nice sudo -u \"\$remoteuser\" -H -s -- \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
 	fi && return
