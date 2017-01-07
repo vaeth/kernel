@@ -29,7 +29,6 @@ case $state in
 	'077:Create files only user accessible (default)'
 	'007:Create files only user or group accessible'
 	)
-	_describe -t umasks 'umask' umsk
-	ret=$?;;
+	_describe -t umasks 'umask' umsk && ret=0;;
 esac
 return ret
