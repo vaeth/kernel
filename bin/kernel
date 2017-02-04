@@ -16,9 +16,12 @@ esac
 if eix_functions=`eix-functions.sh 2>/dev/null`
 then	eval "$eix_functions"
 else	ReadVar() {
-	read_var=`portageq envvar $2` || read_var=
+	if [ $# -lt 2 ] || [ x"$1" = x"$2" ]
+	then	eval "[ -z \"\${$1++}\" ]" || return 0
+	else	eval unset $1
+	fi
+	read_var=`portageq envvar $2 2>/dev/null` || return
 	eval $1=\$read_var
-	[ -n "${read_var:++}" ]
 }
 fi
 
@@ -393,12 +396,8 @@ PrepAndRemote() {
 	remoteUID=`id -u "$remoteuser"` || Fatal "id -u $remoteuser failed"
 	remoteGID=`id -g "$remoteuser"` || Fatal "id -g $remoteuser failed"
 	Info "Compiling scheduled for $remoteuser ($remoteUID:$remoteGID)."
-	if $forceflag
-	then	passforce=false
-	else	passforce=:
-		Info '' 'You will get asked interactively at each step.' \
+	$forceflag || Info '' 'You will get asked interactively at each step.' \
 	'To avoid this, use option -f or reply on a question with r(est).' ''
-	fi
 	clr=:
 	if test -d "$KBUILD_OUTPUT"
 	then	if Ask "Clean $KBUILD_OUTPUT (only partially: keep .config*)"
@@ -452,8 +451,7 @@ PrepAndRemote() {
 	then	removex=:
 	else	removex=false
 	fi
-	$forceflag && $passforce && PushOpt '-f'
-	$statusline || PushOpt '-H'
+	$forceflag && PushOpt '-f'
 	CalcNice
 	SHELL=`command -v -- sh`
 	Quote export "SHELL=$SHELL"
