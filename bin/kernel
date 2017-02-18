@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+script_version=3.0
 set -u
 set -f
 
@@ -15,13 +16,20 @@ esac
 
 if eix_functions=`eix-functions.sh 2>/dev/null`
 then	eval "$eix_functions"
-else	ReadVar() {
+elif command -v portageq >/dev/null 2>&1
+then	ReadVar() {
 	if [ $# -lt 2 ] || [ x"$1" = x"$2" ]
 	then	eval "[ -z \"\${$1++}\" ]" || return 0
 	else	eval unset $1
 	fi
 	read_var=`portageq envvar $2 2>/dev/null` || return
 	eval $1=\$read_var
+}
+else	ReadVar() {
+	if [ $# -lt 2 ] || [ x"$1" = x"$2" ]
+	then	eval ": \${$1:=}"
+	else	eval "$1=\${$2-}"
+	fi
 }
 fi
 
@@ -32,12 +40,51 @@ Push() {
 	Push "$@"
 }
 
-Exit() {
-	exit ${1-}
-}
-
 magicquit=130
 magicforce=65
+exittraps=
+Exit() {
+	exitstat=${1:-$?}
+	[ -n "${exittraps}" ] || exit $exitstat
+	trap : EXIT HUP INT TERM
+	exitnumarg=$#
+	eval "$exittraps"
+	trap - EXIT HUP INT TERM
+	exit $exitstat
+}
+
+ExitTraps() {
+	trap : EXIT HUP INT TERM
+	exitstat=
+	eval "$exittraps"
+	trap - EXIT HUP INT TERM
+	exit $magicquit
+}
+
+AddTrap() {
+	if [ -n "${exittraps:++}" ]
+	then	exittraps="$*
+$exittraps"
+		return
+	fi
+	exittraps="$*"
+	trap ExitTraps EXIT HUP INT TERM
+}
+
+TitleTrap() {
+	if [ -z "$exitstat" ]
+	then	Title "${0##*/} interrupt"
+		return
+	fi
+	[ $exitnumarg -gt 1 ] && return 0
+	if [ $exitstat -eq 0 ]
+	then	Title "${0##*/}: finish"
+	elif [ $exitstat -eq $magicforce ] || [ $exitstat -eq $magicquit ]
+	then	Title "${0##*/}: remote finish"
+	else	Title "${0##*/}: failure"
+	fi
+}
+
 Title() {
 Title() {
 :
@@ -47,25 +94,7 @@ Title() {
 		return;;
 	esac
 	command -v title >/dev/null 2>&1 || return 0
-Exit() {
-	exitstat=${1:-$?}
-	trap - EXIT HUP INT TERM
-	[ $# -gt 1 ] && exit $exitstat
-	if [ $exitstat -eq 0 ]
-	then	Title "${0##*/}: finish"
-	elif [ $exitstat -eq $magicforce ] || [ $exitstat -eq $magicquit ]
-	then	Title "${0##*/}: remote finish"
-	else	Title "${0##*/}: failure"
-	fi
-	exit $exitstat
-}
-TitleTrap() {
-	trap : EXIT HUP INT TERM
-	Title "${0##*/} interrupt"
-	trap - EXIT HUP INT TERM
-	exit $magicquit
-}
-	trap TitleTrap EXIT HUP INT TERM
+	AddTrap TitleTrap
 TitleInit() {
 . title "$@"
 }
@@ -117,14 +146,21 @@ MyDiff() {
 	QuoteExec "$diffd" -- "$diffa" "$diffb"
 }
 
+Version() {
+	Echo "kernel $script_version"
+}
+
 Usage() {
 	Echo "Usage: ${0##*/} [options]
-This script will compile and install the kernel and kernelmodules
-(asking at each step what should be done).
+This script will compile and install the kernel and kernel modules
+(by default asking at each step what should be done).
 The following options are available:
 
-  -f (force) always assume 'yes'. You might want to combine this with:
+  -f (force) always assume 'yes'.  You might want to combine this with other
+           options to suppress certain questions.
+
   -p       use oldconfig
+  -P       do not ask for oldconfig
 
   -n       use nconfig    (resp. do not ask for other *config)
   -x       use xconfig    (resp. do not ask for other *config)
@@ -151,6 +187,9 @@ The following options are available:
            a subdirectory thereof, too.
   -C       Do not use ccache (default if USER is not portage).
 
+  -b       Force bfd linker temporarily (if possible)
+  -B       Do not force bfd linker
+
   -a PARA  Add PARA to the make parameters. Typical example:
            -a 'CONFIG_DEBUG_SECTION_MISMATCH=y'
            This can be used successively.
@@ -160,7 +199,10 @@ The following options are available:
            If this option is used, also the installation is done with the
            permissions of USER.
 
-  -O PATH  As -o PATH but use root permissions for the installation."
+  -O PATH  As -o PATH but use root permissions for the installation.
+
+  -v       print version and exit
+  -h       show this help"
 	Exit ${1:-1}
 }
 
@@ -180,9 +222,10 @@ PushExport() {
 }
 
 forceflag=false
-oldconfig=false
+oldconfig=
 configtype=
 useccache=
+usebfd=
 xtransfer=
 remoteuser=
 prefixdir=
@@ -190,12 +233,13 @@ rootinstalls=:
 titleopt=
 setumask=077
 OPTIND=1
-while getopts 'fpnmgxNcCxXT:a:u:U:o:O:h' opt
+while getopts 'fpPnmgxNcCbBxXT:a:u:U:o:O:vh' opt
 do	[ x"$opt" != x'?' ] || Exit 1
 	PushOpt "-$opt"
 	case $opt in
 	f)	forceflag=:;;
 	p)	oldconfig=:;;
+	P)	oldconfig=false;;
 	n)	configtype='nconfig';;
 	x)	configtype='xconfig';;
 	m)	configtype='menuconfig';;
@@ -203,6 +247,8 @@ do	[ x"$opt" != x'?' ] || Exit 1
 	N)	configtype='none';;
 	c)	useccache=:;;
 	C)	useccache=false;;
+	b)	usebfd=:;;
+	B)	usebfd=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
 	T)	PushOpt "$OPTARG"
@@ -218,6 +264,7 @@ do	[ x"$opt" != x'?' ] || Exit 1
 		rootinstalls=false;;
 	O)	PushOpt "$OPTARG"
 		prefixdir=$OPTARG;;
+	v)	Version;;
 	*)	Usage 0;;
 	esac
 done
@@ -460,12 +507,17 @@ PrepAndRemote() {
 	for export_var in $ccache_vars
 	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
+	AskSetBfd
 	if $xtransfer
 	then	eval QuoteExec \$nice sudox -- \"\$remoteuser\" \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
+		rvalue=$?
 	else	removex=false
 		eval QuoteExec \$nice sudo -u \"\$remoteuser\" -H -s -- \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
-	fi && return
-	rvalue=$?
+		rvalue=$?
+	fi
+	Info "Remote script finished; back to $user ($uid:$gid)"
+	UnsetBfd || Fatal "failed to unset linker to bfd"
+	[ $rvalue -ne 0 ] || return
 	[ $rvalue -eq $magicquit ] && Exit
 	[ $rvalue -eq $magicforce ] && {
 		forceflag=:
@@ -515,6 +567,94 @@ CalcKernelSystem() {
 	CalcModuleName
 	kernelname=kernel-$name
 	systemname=$modulename/System.map
+}
+
+calc_linker_status=
+CalcLinkerConfig() {
+	[ -z "$calc_linker_status" ] || return $calc_linker_status
+	calc_linker_status=1
+	ld_fullpath=`command -v ld` && [ -n "${ld_fullpath:++}" ] || return
+	ld_fullpath=`readlink -f -- "$ld_fullpath"` || return
+	test -x "$ld_fullpath" || return
+	ld_full_link=${ld_fullpath%.*}
+	test -h "$ld_full_link" && ld_linkname=`readlink -- "$ld_full_link"` \
+		&& [ "$ld_linkname" = "${ld_fullpath##*/}" ] \
+		&& test -x "${ld_full_link%/*}/ld.bfd" || ld_full_link=
+	case $ld_fullpath in
+	*.bfd)
+		ld_havegold=false
+		calc_linker_status=0;;
+	*.gold)
+		ld_havegold=:
+		calc_linker_status=0;;
+	esac
+	return $calc_linker_status
+}
+
+TrapSetGoldLn() {
+	QuoteExec ln -sfn -- "$ld_linkname" "$ld_full_link"
+}
+
+TrapSetGoldConfig() {
+	QuoteExec binutils-config --linker "$ld_linkname"
+}
+
+UnsetBfd() {
+	:
+}
+
+SetBfd() {
+	CalcLinkerConfig && [ -n "$ld_full_link" ] || return
+	if command -v binutils-config >/dev/null 2>&1
+	then	AddTrap TrapSetGoldConfig
+UnsetBfd() {
+UnsetBfd() {
+:
+}
+TrapSetGoldConfig && \
+TrapSetGoldConfig() {
+:
+}
+}
+		QuoteExec binutils-config --linker ld.bfd
+		return
+	fi
+	AddTrap TrapSetGoldLn
+UnsetBfd() {
+UnsetBfd() {
+:
+}
+TrapSetGoldLn && \
+TrapSetGoldLn() {
+:
+}
+}
+	QuoteExec ln -sfn -- ld.bfd "$ld_full_link"
+}
+
+AskSetBfd() {
+	CalcLinkerConfig || {
+		Info 'Cannot determine currently set linker'
+		return
+	}
+	$ld_havegold || {
+		Info 'Current linker is bfd'
+		return
+	}
+	Info 'Current linker is gold'
+	if [ -n "$usebfd" ]
+	then	$usebfd || return 0
+		[ -n "${ld_full_link:++}" ] || \
+			Fatal 'cannot determine how to set bfd linker'
+		SetBfd
+		return
+	fi
+	[ -n "${ld_full_link:++}" ] || {
+		Info 'Cannot determine how to set bfd linker'
+		return
+	}
+	! Ask 'Use bfd linker' || SetBfd
+	return
 }
 
 ReadCcacheConf() {
@@ -651,8 +791,13 @@ CompileRemote() {
 	$clr && Ask 'Use make mrproper (usually you do not want this)' && \
 		MyMake mrproper
 
-	$oldconfig || \
-		Ask 'Use make oldconfig (usually you do not want this)' && {
+	if [ -z "$oldconfig" ]
+	then	if Ask 'Use make oldconfig (usually you do not want this)'
+		then	oldconfig=:
+		else	oldconfig=false
+		fi
+	fi
+	! $oldconfig || {
 		MyMake oldconfig
 		MyDiff
 	}
@@ -962,7 +1107,6 @@ case $arg in
 	CurrDate
 	time_begin=$currdate
 	PrepAndRemote
-	Info "Remote script finished; back to $user ($uid:$gid)"
 	$rootinstalls && InstallAsRoot
 	FinishText;;
 remote)
