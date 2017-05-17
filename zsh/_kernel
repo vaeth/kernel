@@ -13,6 +13,8 @@ _arguments -s -S -A '-*' : \
 '*-T+[pass specified title option]:title option:_title_opt' \
 '-u+[compile as specified user]:user for kernel compilation:_users' \
 '-U+[use specified umask]:umask:->umask' \
+'-l+[use specified logfile]:logfile:_files' \
+'-L[do not update logfile]' \
 '-Y[transfer X data (default with -x/-g and USER=portage)]' \
 '-X[do not transfer X data]' \
 '-c[use ccache]' \

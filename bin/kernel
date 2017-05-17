@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-script_version=3.0
+script_version=4.0
 set -u
 set -f
 
@@ -150,6 +150,14 @@ Version() {
 	Echo "kernel $script_version"
 }
 
+name=
+Log() {
+	$updatelog || return 0
+	log=`date '+%Y-%m-%d %T%z'`': '
+	[ -z "${name:++}" ] || log=$log$name': '
+	Echo "$log$*" >>"$logfile"
+}
+
 Usage() {
 	Echo "Usage: ${0##*/} [options]
 This script will compile and install the kernel and kernel modules
@@ -201,6 +209,9 @@ The following options are available:
 
   -O PATH  As -o PATH but use root permissions for the installation.
 
+  -l LOG   Use logfile LOG. Default is /var/log/kernel.log
+  -L       Do not update logfile
+
   -v       print version and exit
   -h       show this help"
 	Exit ${1:-1}
@@ -232,8 +243,10 @@ prefixdir=
 rootinstalls=:
 titleopt=
 setumask=077
+updatelog=:
+logfile=/var/log/kernel.log
 OPTIND=1
-while getopts 'fpPnmgxNcCbBxXT:a:u:U:o:O:vh' opt
+while getopts 'fpPnmgxNcCbBxXLl:T:a:u:U:o:O:vh' opt
 do	[ x"$opt" != x'?' ] || Exit 1
 	PushOpt "-$opt"
 	case $opt in
@@ -251,6 +264,9 @@ do	[ x"$opt" != x'?' ] || Exit 1
 	B)	usebfd=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
+	L)	updatelog=false;;
+	l)	PushOpt "$OPTARG"
+		logfile=$OPTARG;;
 	T)	PushOpt "$OPTARG"
 		titleopt=$titleopt$OPTARG;;
 	a)	PushOpt "$OPTARG"
@@ -503,11 +519,12 @@ PrepAndRemote() {
 	SHELL=`command -v -- sh`
 	Quote export "SHELL=$SHELL"
 	export SHELL
-	PushOpt '--'
 	for export_var in $ccache_vars
 	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
 	AskSetBfd
+	PrepareLog
+	PushOpt '--'
 	if $xtransfer
 	then	eval QuoteExec \$nice sudox -- \"\$remoteuser\" \"\$fullpath\" $remoteopt remote $exportpass -- \$removex \$clr
 		rvalue=$?
@@ -526,6 +543,7 @@ PrepAndRemote() {
 	Fatal "calling ${0##*/} as $remoteuser failed"
 }
 
+extrainfo=
 MyMakeTitle() {
 	while :
 	do	case ${1-} in
@@ -533,7 +551,7 @@ MyMakeTitle() {
 			shift
 			continue;;
 		esac
-		TitleInfo make ${1+"$@"}
+		TitleInfo make ${1+"$@"} ${extrainfo:+"$extrainfo"}
 		return
 	done
 }
@@ -655,6 +673,29 @@ AskSetBfd() {
 	}
 	! Ask 'Use bfd linker' || SetBfd
 	return
+}
+
+PrepareLog() {
+	$updatelog || return 0
+	! test -f "$logfile" || return 0
+	# Do not create logfile if it is not a file
+	! test -r "$logfile" && (
+		umask 022
+		set -C
+		: >"$logfile"
+	) && chown -- "$remoteuser": "$logfile" && test -f "$logfile" || {
+		updatelog=false
+		PushOpt '-L'
+		return 1
+	}
+}
+
+ReadLog() {
+	test -f "$logfile" && test -r "$logfile" || return 0
+	prevtime=`sed -ne 's/^.*\:[[:space:]]*\(.* compilation time. .*\)/\\1/p' -- "$logfile" | tail -n 1`
+	[ -n "${prevtime:++}" ] || return 0
+	Echo "Previous $prevtime"
+	prevtime=${prevtime%%?compilation*}${prevtime##*time?}
 }
 
 ReadCcacheConf() {
@@ -816,36 +857,51 @@ CompileRemote() {
 	test -f "$KBUILD_OUTPUT/.config.old" && \
 		Ask "remove $KBUILD_OUTPUT/.config.old" && \
 		rm -f -- "$KBUILD_OUTPUT/.config.old"
-
+	prevtimeinfo=
+	ReadLog
+	[ -z "${prevtime:++}" ] || prevtimeinfo=[$prevtime]
+	result=
+	what=
 	if Ask 'Compile both, kernel and modules'
 	then	CurrDate
 		comp_start=$currdate
+		extrainfo=$prevtimeinfo
 		MyMake
+		extrainfo=
 		CalcTimeDifference "$comp_start" && \
 			Info '' "Time for kernel+modules compilation: $result" ''
+		what='kernel+modules'
 	else	compiletime=
 		Ask 'Compile kernel'  && {
 			CurrDate
 			comp_start=$currdate
+			extrainfo=$prevtimeinfo
 			MyMake bzImage
+			extrainfo=
 			CalcTimeDifference "$comp_start" && {
 				compiletime=$time_difference
 				Info '' "Time for kernel compilation: $result" ''
 			}
+			what=kernel
 		}
 		Ask 'Compile modules' && {
 			CurrDate
 			modules_start=$currdate
+			extrainfo=$prevtimeinfo
 			MyMake modules
+			extrainfo=
 			CalcTimeDifference "$modules_start" && {
 				Info '' "Time for modules compilation: $result" ''
-				if [ -n "${compiletime:++}" ]
+				if [ -n "${what:++}" ]
 				then	CalcTime "$(( $compiletime + $time_difference ))"
 					Info "Time for kernel+modules compilation: $result" ''
+					what='kernel+modules'
+				else	what=modules
 				fi
 			}
 		}
 	fi
+	[ -z "${what:++}" ] || Log "$what compilation time: $result"
 }
 
 SetRootPerm() {
@@ -870,6 +926,7 @@ MoveKernel() {
 		do	test -r "$i" || continue
 			test -h "$i" && continue
 			found=:
+			installed=${installed-}${installed:+\ }kernel
 			mv -- "$i" "$1/$kernelname" \
 				&& SetRootPerm "$1/$kernelname" \
 				&& break
@@ -892,6 +949,7 @@ InstallIntoPrefix() {
 	if Ask "Install modules to $prefixdir"
 	then	MyMake INSTALL_MOD_PATH=$prefixdir modules_install
 		FixModules
+		installed=modules
 	fi
 	MoveKernel "$prefixdir"
 }
@@ -908,6 +966,7 @@ InstallAsRoot() {
 	if Ask 'Install modules'
 	then	MyMake modules_install
 		FixModules
+		installed=modules
 	fi
 	Cd "$bootname"
 	MoveKernel "$bootname"
@@ -1107,7 +1166,9 @@ case $arg in
 	CurrDate
 	time_begin=$currdate
 	PrepAndRemote
+	installed=
 	$rootinstalls && InstallAsRoot
+	[ -z "${installed:++}" ] || Log "installed: $installed"
 	FinishText;;
 remote)
 	Info "${0##*/}: called remotely as $user ($uid:$gid)"
