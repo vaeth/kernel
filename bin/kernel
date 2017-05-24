@@ -859,7 +859,10 @@ CompileRemote() {
 		rm -f -- "$KBUILD_OUTPUT/.config.old"
 	prevtimeinfo=
 	ReadLog
-	[ -z "${prevtime:++}" ] || prevtimeinfo=[$prevtime]
+	if [ -n "${prevtime:++}" ]
+	then	prevtimeinfo="[`date +%T` $prevtime]"
+	else	prevtimeinfo="[`date +%T`]"
+	fi
 	result=
 	what=
 	if Ask 'Compile both, kernel and modules'
