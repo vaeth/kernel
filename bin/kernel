@@ -691,10 +691,10 @@ PrepareLog() {
 }
 
 ReadLog() {
-	test -f "$logfile" && test -r "$logfile" || return 0
+	test -f "$logfile" && test -r "$logfile" || return
 	prevtime=`sed -ne 's/^.*\:[[:space:]]*\(.* compilation time. .*\)/\\1/p' -- "$logfile" | tail -n 1`
-	[ -n "${prevtime:++}" ] || return 0
-	Echo "Previous $prevtime"
+	[ -n "${prevtime:++}" ] || return
+	Info "Previous $prevtime"
 	prevtime=${prevtime%%?compilation*}${prevtime##*time?}
 }
 
@@ -857,12 +857,8 @@ CompileRemote() {
 	test -f "$KBUILD_OUTPUT/.config.old" && \
 		Ask "remove $KBUILD_OUTPUT/.config.old" && \
 		rm -f -- "$KBUILD_OUTPUT/.config.old"
-	prevtimeinfo=
-	ReadLog
-	if [ -n "${prevtime:++}" ]
-	then	prevtimeinfo="[`date +%T` $prevtime]"
-	else	prevtimeinfo="[`date +%T`]"
-	fi
+	prevtimeinfo=`date +%T`
+	! ReadLog || prevtimeinfo=$prevtimeinfo' '$prevtime
 	result=
 	what=
 	if Ask 'Compile both, kernel and modules'
