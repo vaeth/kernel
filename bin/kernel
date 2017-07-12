@@ -337,7 +337,7 @@ then	Fatal "This script should only be used if KBUILD_OUTPUT is set in the
 environment and is a different directory than KERNEL_DIR, i.e. it must *not* be
 	$KERNEL_DIR
 Note that setting KBUILD_OUTPUT should be done in the environment of root or
-alternatively in /etc/make.conf (or /etc/portage/make.conf) so that portage
+alternatively in /etc/portage/make.conf (or /etc/make.conf) so that portage
 will honour it later when emerging kernel-related ebuilds."
 fi
 
