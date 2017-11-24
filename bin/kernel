@@ -63,11 +63,15 @@ ExitTraps() {
 
 AddTrap() {
 	if [ -n "${exittraps:++}" ]
-	then	exittraps="$*
+	then	case $exittraps in
+		*"$*"*)
+			return;;
+		esac
+		exittraps="$*
 $exittraps"
 		return
 	fi
-	exittraps="$*"
+	exittraps=$*
 	trap ExitTraps EXIT HUP INT TERM
 }
 
@@ -363,8 +367,33 @@ BackSpaceArg() {
 schedule=
 command -v schedule >/dev/null 2>&1 && schedule=:
 
+savetty=
+ClearKeyBuffer() {
+	stty -icanon -echo min 0 time 0
+	while [ -n "`dd count=1 bs=1 2>/dev/null`" ]
+	do	:
+	done
+}
+
+TrapResetTty() {
+	ClearKeyBuffer
+	stty $savetty
+}
+
+Getkey() {
+	if [ -z "${savetty:++}" ]
+	then	savetty=`stty -g`
+		AddTrap TrapResetTty
+	fi
+	ClearKeyBuffer
+	stty -icanon -echo min 1 time 0
+	key=`dd count=1 bs=1 2>/dev/null` || key=
+	ClearKeyBuffer
+	stty $savetty
+	:
+}
+
 quitstatus=0
-oldtty=
 Ask() {
 	if $forceflag
 	then	Echo "$*."
@@ -373,12 +402,8 @@ Ask() {
 	Title '???'
 	askt="(Yes/No/Rest${schedule:+/Sched}/Quit) "
 	Echon "$*? $askt"
-	while :
-	do	[ -n "${oldtty:++}" ] || oldtty=`stty -g`
-		stty -icanon -echo
-		askkey=`dd count=1 bs=1 2>/dev/null`
-		stty $oldtty
-		case $askkey in
+	while Getkey
+	do	case $key in
 		[yY]*)
 			BackSpaceArg "$askt"
 			Echo 'Yes'
