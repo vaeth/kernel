@@ -34,4 +34,5 @@ For installation, copy the content of `bin/` with executable permission in your
 copy the content of `zsh/` to a directory of your zsh's `$fpath`
 (perhaps to `/usr/share/zsh/site-functions/`).
 
-There is also an ebuild in the mv overlay (which is available over layman).
+There is also an ebuild in the `mv` repository
+(available by `app-select/eselect-repository` or `app-portage/layman`).
