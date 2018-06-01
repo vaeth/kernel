@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-script_version=4.5
+script_version=4.6
 set -u
 set -f
 
@@ -387,6 +387,14 @@ Getkey() {
 	:
 }
 
+Schedule() {
+	if [ -z "${SCHEDULE_JOB:++}" ]
+	then	QuoteExec schedule queue 'true kernel rest'
+	else	QuoteExec schedule --job="$SCHEDULE_JOB" \
+			--command-text=kernel --command-text=rest queue true
+	fi || Warning 'schedule failed'
+}
+
 quitstatus=0
 Ask() {
 	if $forceflag
@@ -416,9 +424,8 @@ Ask() {
 			BackSpaceArg "$askt"
 			Echo 'Schedule + Rest'
 			forceflag=:
-			schedule queue 'true kernel rest' && return
-			Echo 'schedule failed'
-			Exit 1;;
+			Schedule
+			return 0;;
 		[qQ]*)
 			BackSpaceArg "$askt"
 			Echo 'Quit'
