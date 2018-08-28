@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-script_version=4.7
+script_version=4.8
 set -u
 set -f
 
@@ -340,11 +340,18 @@ will honour it later when emerging kernel-related ebuilds."
 fi
 
 ccache_vars=
-for ccache_var in DIR COMPRESS NOCOMPRESS COMPRESSLEVEL NLEVELS EXTENSION \
-	COMPILERCHECK DIRECT NODIRECT DISABLE EXTRAFILES HARDLINK HASHDIR \
-	LOGFILE STATS NOSTATS PATH PREFIX READONLY RECACHE CPP2 SLOPPINESS \
-	TEMPDIR UMASK UNIFY NOUNIFY SIZE
+ccache_bools=
+for ccache_var in DIR COMMENTS NOCOMMENTS COMPRESS NOCOMPRESS COMPRESSLEVEL \
+	CPP2 NOCPP2 EXTENSION COMPILERCHECK DIRECT NODIRECT DISABLE NODISABLE \
+	EXTRAFILES HARDLINK NOHARDLINK HASHDIR NOHASHDIR IGNOREHEADERS \
+	LIMIT_MULTIPLE LOGFILE MAXFILES MAXSIZENLEVELSPATH PREFIX PREFIX_CPP \
+	READONLY NOREADONLY READONLY_DIRECT NOREADONLY_DIRECT RECACHE NORECACHE \
+	SIZE SLOPPINESS STATS NOSTATS TEMPDIR UMASK UNIFY NOUNIFY
 do	ccache_vars=$ccache_vars' CCACHE_'$ccache_var
+	case $ccache_var in
+	NO*)
+		ccache_bools=$ccache_bools' '${ccache_var#NO};;
+	esac
 done
 
 BackSpaceArg() {
@@ -634,46 +641,72 @@ ReadLog() {
 	prevtime=${prevtime%%?compilation*}${prevtime##*time?}
 }
 
+CcacheRegular() {
+	case $1 in
+	CCACHE_SIZE|CCACHE_BASEDIR)
+		return 1;;
+	CCACHE_UMASK)
+		[ -z "${setumask:++}" ] || return 1;
+	esac
+}
+
+ExportVar() {
+	eval "[ -z \"\${$1++}\" ]" || eval "Quote export \"\$1=\$$1\"
+export $1"
+}
+
+UnsetVar() {
+	eval "[ -z \"\${$1++}\" ]" || eval "Quote unset $1
+unset $1"
+}
+
+ExportVarIfNonempty() {
+	if eval "[ -n \"\${$1++}\" ]"
+	then	[ $# -le 1 ] || eval "$1=\$2"
+		ExportVar $1
+		return
+	fi
+	UnsetVar $1
+	return 1
+}
+
+CcacheVarIsNotBool() {
+	case " $ccache_bools " in
+	*" ${1%NO} "*)
+		return 1;;
+	esac
+}
+
 ReadCcacheConf() {
 	for ccache_var in $ccache_vars
-	do	case $ccache_var in
-		CCACHE_SIZE)
-			continue;;
-		CCACHE_UMASK)
-			[ -z "${setumask:++}" ] || continue;;
-		esac
+	do	CcacheRegular $ccache_var || continue
 		ReadVar $ccache_var $ccache_var
-		if eval "[ -z \"\${$ccache_var++}\" ]"
-		then	case $ccache_var in
-			CCACHE_SLOPPINESS)
-CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches,pch_defines';;
-			CCACHE_DIR)
-				:;;
-			*)
-				continue;;
+	done
+	if [ -z "${CCACHE_DIR:++}" ]
+	then	ReadVar CCACHE_DIR PORTAGE_TMPDIR
+		CCACHE_DIR=${CCACHE_DIR:-/var/tmp}/ccache
+	fi
+	: ${CCACHE_SLOPPINESS='file_macro,time_macros,include_file_mtime,include_file_ctime,file_stat_matches,pch_defines'}
+	for ccache_bool in $ccache_bools
+	do	if ExportVarIfNonempty CCACHE_$ccache_bool true
+		then	UnsetVar CCACHE_NO$ccache_bool
+		else	case $ccache_bool in
+			HASHDIR)
+				eval CCACHE_NO$ccache_bool=true;;
 			esac
+			ExportVarIfNonempty CCACHE_NO$ccache_bool true
 		fi
-		if eval "[ -z \"\${$ccache_var:++}\" ]"
-		then	case $ccache_var in
-			CCACHE_DIR)
-				ReadVar CCACHE_DIR PORTAGE_TMPDIR
-				CCACHE_DIR=${CCACHE_DIR:-/var/tmp}/ccache;;
-			*)
-				Quote unset $ccache_var
-				eval "unset $ccache_var"
-				continue;;
-			esac
-		fi
-		eval "Quote export \"\$ccache_var=\$$ccache_var\"
-export $ccache_var"
+	done
+	for ccache_var in $ccache_vars
+	do	CcacheRegular $ccache_var || continue
+		CcacheVarIsNotBool ${ccache_var#CCACHE_} || continue
+		ExportVar $ccache_var
 	done
 	CCACHE_BASEDIR=${KERNEL_DIR%/*}
-	Quote export "CCACHE_BASEDIR=$CCACHE_BASEDIR"
-	export CCACHE_BASEDIR
+	ExportVar CCACHE_BASEDIR
 	if [ -n "${setumask:++}" ]
 	then	CCACHE_UMASK=$setumask
-		export "CCACHE_UMSK=$CCACHE_UMASK"
-		export CCACHE_UMASK
+		ExportVar CCACHE_UMASK
 	fi
 }
 
