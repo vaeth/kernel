@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-script_version=4.8
+script_version=4.9
 set -u
 set -f
 
@@ -199,6 +199,9 @@ The following options are available:
            a subdirectory thereof, too.
   -C       Do not use ccache (default if USER is not portage).
 
+  -b       Force bfd linker temporarily (if possible)
+  -B       Do not force bfd linker
+
   -a PARA  Add PARA to the make parameters. Typical example:
            -a 'CONFIG_DEBUG_SECTION_MISMATCH=y'
            This can be used successively.
@@ -236,6 +239,7 @@ PushExport() {
 forceflag=false
 oldconfig=
 configtype=
+usebfd=
 useccache=
 xtransfer=
 remoteuser=
@@ -246,7 +250,7 @@ setumask=077
 updatelog=:
 logfile=/var/log/kernel.log
 OPTIND=1
-while getopts 'fpPnmgxNcCxXLl:T:a:u:U:o:O:vh' opt
+while getopts 'fpPnmgxNcCbBxXLl:T:a:u:U:o:O:vh' opt
 do	[ x"$opt" != x'?' ] || Exit 1
 	PushOpt "-$opt"
 	case $opt in
@@ -260,6 +264,8 @@ do	[ x"$opt" != x'?' ] || Exit 1
 	N)	configtype='none';;
 	c)	useccache=:;;
 	C)	useccache=false;;
+	b)	usebfd=:;;
+	B)	usebfd=false;;
 	Y)	xtransfer=:;;
 	X)	xtransfer=false;;
 	L)	updatelog=false;;
@@ -486,6 +492,10 @@ FeaturesHave() {
 	return $feature_have
 }
 
+UnsetBfd() {
+	:
+}
+
 # The preparation parts which have to be done as root:
 
 PrepAndRemote() {
@@ -555,6 +565,7 @@ PrepAndRemote() {
 	for export_var in $ccache_vars SCHEDULE_JOB
 	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
+	AskSetBfd
 	PrepareLog
 	PushOpt '--'
 	if $xtransfer
@@ -565,6 +576,7 @@ PrepAndRemote() {
 		rvalue=$?
 	fi
 	Info "Remote script finished; back to $user ($uid:$gid)"
+	UnsetBfd || Fatal "failed to unset linker to bfd"
 	[ $rvalue -ne 0 ] || return
 	[ $rvalue -eq $magicquit ] && Exit
 	[ $rvalue -eq $magicforce ] && {
@@ -675,6 +687,128 @@ CcacheVarIsNotBool() {
 	*" ${1%NO} "*)
 		return 1;;
 	esac
+}
+
+CalcLinkerConfigSymbolic() {
+	ld_fullpath=`command -v ld` && [ -n "${ld_fullpath:++}" ] || return
+	ld_fullpath=`readlink -f -- "$ld_fullpath"` || return
+	test -x "$ld_fullpath" || return
+	ld_full_link=${ld_fullpath%.*}
+	test -h "$ld_full_link" && ld_linkname=`readlink -- "$ld_full_link"` \
+		&& [ "$ld_linkname" = "${ld_fullpath##*/}" ] \
+		&& test -x "${ld_full_link%/*}/ld.bfd" || ld_full_link=
+	case $ld_fullpath in
+	*.bfd)
+		ld_havegold=false
+		return 0;;
+	*.gold)
+		ld_havegold=:
+		return 0;;
+	esac
+	ld_full_link=
+	return 1
+}
+
+IsFile() {
+	test -f "$1" && ! test -h "$1"
+}
+
+ReadInode() {
+	readinode=`stat -c '%i' -- "$2"` && [ -n "${readinode:++}" ] || return
+	eval $1=\$readinode
+}
+
+CalcLdPath() {
+	ld_fullpath=
+	set +f
+	for calcldpath in /usr/*/binutils-bin/*/ld
+	do	test -r "$calcldpath" && IsFile "$calcldpath.gold" \
+			&& IsFile "$calcldpath.bfd" || continue
+		ld_fullpath=$calcldpath
+		break
+	done
+	set -f
+	return
+}
+
+CalcLinkerConfigHardlink() {
+	CalcLdPath && [ -n "${ld_fullpath:++}" ] || return
+	ReadInode node_cur "$ld_fullpath" || return
+	ReadInode node_alt "$ld_fullpath.gold" || return
+	if [ x"$node_cur" = x"$node_alt" ]
+	then	ld_havegold=:
+	else	ReadInode node_alt "$ld_fullpath.bfd" || return
+		[ x"$node_cur" = x"$node_alt" ] || return
+		ld_havegold=false
+	fi
+}
+
+calc_linker_status=
+CalcLinkerConfig() {
+	[ -z "$calc_linker_status" ] || return $calc_linker_status
+	if CalcLinkerConfigSymbolic || CalcLinkerConfigHardlink
+	then	calc_linker_status=0
+	else	calc_linker_status=1
+	fi
+	return $calc_linker_status
+}
+
+CalcGoldBfd() {
+	if command -v binutils-config >/dev/null 2>&1
+	then
+SetGoldCmd() {
+	QuoteExec binutils-config --linker ld.gold
+}
+SetBfdCmd() {
+	QuoteExec binutils-config --linker ld.bfd
+}
+	elif [ -n "${ld_full_link:++}" ]
+	then
+SetGoldCmd() {
+	QuoteExec ln -sfn -- "$ld_linkname" "$ld_full_link"
+}
+SetBfdCmd() {
+	QuoteExec ln -sfn -- ld.bfd "$ld_full_link"
+}
+	else	return 1
+	fi
+}
+
+SetBfd() {
+	AddTrap SetGoldCmd
+	! SetBfdCmd || \
+UnsetBfd() {
+UnsetBfd() {
+:
+}
+SetGoldCmd && \
+SetGoldCmd() {
+:
+}
+}
+}
+
+AskSetBfd() {
+	CalcLinkerConfig || {
+		Info 'Cannot determine currently set linker'
+		return
+	}
+	$ld_havegold || {
+		Info 'Current linker is bfd'
+		return
+	}
+	Info 'Current linker is gold'
+	if [ -n "$usebfd" ]
+	then	$usebfd || return 0
+		CalcGoldBfd || Fatal 'cannot determine how to set bfd linker'
+		SetBfd
+		return
+	fi
+	CalcGoldBfd || {
+		Info 'Cannot determine how to set bfd linker'
+		return
+	}
+	! Ask 'Use bfd linker' || SetBfd
 }
 
 ReadCcacheConf() {
