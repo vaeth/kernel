@@ -1,7 +1,7 @@
 # kernel
 
 (C) Martin Väth <martin@mvath.de>
-This project is under the BSD license.
+This project is under the BSD license 2.0 (“3-clause BSD license”).
 
 If you want to configure/compile your linux kernel as a user and install it
 as root, usually several standard commands should be entered.
