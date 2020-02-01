@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-script_version=4.9
+script_version=5.0
 set -u
 set -f
 
@@ -732,6 +732,7 @@ CalcLdPath() {
 }
 
 CalcLinkerConfigHardlink() {
+	ld_hardlink=false
 	CalcLdPath && [ -n "${ld_fullpath:++}" ] || return
 	ReadInode node_cur "$ld_fullpath" || return
 	ReadInode node_alt "$ld_fullpath.gold" || return
@@ -741,6 +742,13 @@ CalcLinkerConfigHardlink() {
 		[ x"$node_cur" = x"$node_alt" ] || return
 		ld_havegold=false
 	fi
+	IsPlainFile "$ld_fullpath" && IsPlainFile "$ld_fullpath.bfd" \
+		&& IsPlainFile "$ld_fullpath.gold" || return 0
+	ld_hardlink=:
+}
+
+IsPlainFile() {
+	test -f "$1" && ! test -h "$1"
 }
 
 calc_linker_status=
@@ -754,21 +762,21 @@ CalcLinkerConfig() {
 }
 
 CalcGoldBfd() {
-	if command -v binutils-config >/dev/null 2>&1
-	then
-SetGoldCmd() {
-	QuoteExec binutils-config --linker ld.gold
-}
-SetBfdCmd() {
-	QuoteExec binutils-config --linker ld.bfd
-}
-	elif [ -n "${ld_full_link:++}" ]
+	if [ -n "${ld_full_link:++}" ]
 	then
 SetGoldCmd() {
 	QuoteExec ln -sfn -- "$ld_linkname" "$ld_full_link"
 }
 SetBfdCmd() {
 	QuoteExec ln -sfn -- ld.bfd "$ld_full_link"
+}
+	elif $ld_hardlink
+	then
+SetGoldCmd() {
+	QuoteExec ln -f -- "$ld_fullpath.gold" "$ld_fullpath"
+}
+SetBfdCmd() {
+	QuoteExec ln -f -- "$ld_fullpath.bfd" "$ld_fullpath"
 }
 	else	return 1
 	fi
