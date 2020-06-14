@@ -492,10 +492,6 @@ FeaturesHave() {
 	return $feature_have
 }
 
-UnsetBfd() {
-	:
-}
-
 # The preparation parts which have to be done as root:
 
 PrepAndRemote() {
@@ -565,7 +561,6 @@ PrepAndRemote() {
 	for export_var in $ccache_vars SCHEDULE_JOB
 	do	eval "[ -n \"\${$export_var++}\" ] && PushExport \"\$export_var=\$$export_var\""
 	done
-	AskSetBfd
 	PrepareLog
 	PushOpt '--'
 	if $xtransfer
@@ -576,7 +571,6 @@ PrepAndRemote() {
 		rvalue=$?
 	fi
 	Info "Remote script finished; back to $user ($uid:$gid)"
-	UnsetBfd || Fatal "failed to unset linker to bfd"
 	[ $rvalue -ne 0 ] || return
 	[ $rvalue -eq $magicquit ] && Exit
 	[ $rvalue -eq $magicforce ] && {
@@ -689,134 +683,31 @@ CcacheVarIsNotBool() {
 	esac
 }
 
-CalcLinkerConfigSymbolic() {
-	ld_fullpath=`command -v ld` && [ -n "${ld_fullpath:++}" ] || return
-	ld_fullpath=`readlink -f -- "$ld_fullpath"` || return
-	test -x "$ld_fullpath" || return
-	ld_full_link=${ld_fullpath%.*}
-	test -h "$ld_full_link" && ld_linkname=`readlink -- "$ld_full_link"` \
-		&& [ "$ld_linkname" = "${ld_fullpath##*/}" ] \
-		&& test -x "${ld_full_link%/*}/ld.bfd" || ld_full_link=
-	case $ld_fullpath in
-	*.bfd)
-		ld_havegold=false
-		return 0;;
-	*.gold)
-		ld_havegold=:
-		return 0;;
-	esac
-	ld_full_link=
-	return 1
-}
-
-IsFile() {
-	test -f "$1" && ! test -h "$1"
-}
-
-ReadInode() {
-	readinode=`stat -c '%i' -- "$2"` && [ -n "${readinode:++}" ] || return
-	eval $1=\$readinode
-}
-
-CalcLdPath() {
-	ld_fullpath=
-	set +f
-	for calcldpath in /usr/*/binutils-bin/*/ld
-	do	test -r "$calcldpath" && IsFile "$calcldpath.gold" \
-			&& IsFile "$calcldpath.bfd" || continue
-		ld_fullpath=$calcldpath
-		break
-	done
-	set -f
-	return
-}
-
-CalcLinkerConfigHardlink() {
-	ld_hardlink=false
-	CalcLdPath && [ -n "${ld_fullpath:++}" ] || return
-	ReadInode node_cur "$ld_fullpath" || return
-	ReadInode node_alt "$ld_fullpath.gold" || return
-	if [ x"$node_cur" = x"$node_alt" ]
-	then	ld_havegold=:
-	else	ReadInode node_alt "$ld_fullpath.bfd" || return
-		[ x"$node_cur" = x"$node_alt" ] || return
-		ld_havegold=false
-	fi
-	IsPlainFile "$ld_fullpath" && IsPlainFile "$ld_fullpath.bfd" \
-		&& IsPlainFile "$ld_fullpath.gold" || return 0
-	ld_hardlink=:
-}
-
-IsPlainFile() {
-	test -f "$1" && ! test -h "$1"
-}
-
-calc_linker_status=
 CalcLinkerConfig() {
-	[ -z "$calc_linker_status" ] || return $calc_linker_status
-	if CalcLinkerConfigSymbolic || CalcLinkerConfigHardlink
-	then	calc_linker_status=0
-	else	calc_linker_status=1
-	fi
-	return $calc_linker_status
+	ld_havegold=false
+	calc_linker_config=`ld -v` || return
+	case $calc_linker_config in
+	*[gG]old*)
+		ld_havegold=:;;
+	esac
 }
 
-CalcGoldBfd() {
-	if [ -n "${ld_full_link:++}" ]
-	then
-SetGoldCmd() {
-	QuoteExec ln -sfn -- "$ld_linkname" "$ld_full_link"
-}
-SetBfdCmd() {
-	QuoteExec ln -sfn -- ld.bfd "$ld_full_link"
-}
-	elif $ld_hardlink
-	then
-SetGoldCmd() {
-	QuoteExec ln -f -- "$ld_fullpath.gold" "$ld_fullpath"
-}
-SetBfdCmd() {
-	QuoteExec ln -f -- "$ld_fullpath.bfd" "$ld_fullpath"
-}
-	else	return 1
+AskUseBfd() {
+	activeld=ld
+	if CalcLinkerConfig
+	then	if $ld_havegold
+		then	Info 'Current linker is gold'
+		else	Info 'Current linker is bfd'
+			return 0
+		fi
+	else	Info 'Cannot determine currently set linker'
 	fi
-}
-
-SetBfd() {
-	AddTrap SetGoldCmd
-	! SetBfdCmd || \
-UnsetBfd() {
-UnsetBfd() {
-:
-}
-SetGoldCmd && \
-SetGoldCmd() {
-:
-}
-}
-}
-
-AskSetBfd() {
-	CalcLinkerConfig || {
-		Info 'Cannot determine currently set linker'
-		return
-	}
-	$ld_havegold || {
-		Info 'Current linker is bfd'
-		return
-	}
-	Info 'Current linker is gold'
-	if [ -n "$usebfd" ]
-	then	$usebfd || return 0
-		CalcGoldBfd || Fatal 'cannot determine how to set bfd linker'
-		SetBfd
-		return
+	if [ -z "$usebfd" ]
+	then	Ask 'Use bfd linker (LD=ld.bfd)' || return 0
+	else	$usebfd || return 0
 	fi
-	CalcGoldBfd || {
-		Info 'Cannot determine how to set bfd linker'
-		return
-	}
-	! Ask 'Use bfd linker' || SetBfd
+	PushMake 'LD=ld.bfd'
+	activeld='ld.bfd'
 }
 
 ReadCcacheConf() {
@@ -936,9 +827,12 @@ CompileRemote() {
 	clr=$1
 
 	CalcCcache
+	AskUseBfd
 	CalcMakeopts
 
 	Info "`gcc --version | head -n 1`"
+	ldinfo=`"$activeld" -v | head -n 1`
+	Info "$ldinfo"
 
 	$clr && Ask 'Use make mrproper (usually you do not want this)' && \
 		MyMake mrproper
