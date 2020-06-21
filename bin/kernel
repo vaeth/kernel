@@ -411,9 +411,11 @@ Schedule() {
 quitstatus=0
 Ask() {
 	if $forceflag
-	then	Echo "$*."
+	then	haveasked=false
+		Echo "$*."
 		return 0
 	fi
+	haveasked=:
 	Title '???'
 	askt="(Yes/No/Rest${schedule:+/Sched}/Quit) "
 	Echon "$*? $askt"
@@ -603,6 +605,15 @@ MyMake() {
 	Fatal 'make' ${1+"$@"} 'failed'
 }
 
+extrainfotime=
+MyMakeExtrainfo() {
+	[ -n "${extrainfotime:++}" ] && ! $haveasked \
+		|| extrainfotime=`date +%T`
+	extrainfo=$extrainfotime$prevtimeinfo
+	MyMake ${1+"$@"}
+	extrainfo=
+}
+
 CalcModuleName() {
 	[ -n "${name:++}" ] && [ -n "${modulename:++}" ] && return
 	name=`readlink -f -- "$KERNEL_DIR"` || name=$KERNEL_DIR
@@ -611,8 +622,8 @@ CalcModuleName() {
 	name=${sourcename#*-}
 	[ -n "${name:++}" ] || name='unknown'
 	# We add an "a" and remove it to include possibly trailing newlines
-	localversion=$(sed -n -e 's/^CONFIG_LOCALVERSION="\([^"]*\)"$/\1a/p' -- \
-		"$KBUILD_OUTPUT"/.config 2>/dev/null) || localversion=
+	localversion=$(sed -n -e 's/^CONFIG_LOCALVERSION="\([^"]*\)"$/\1a/p' \
+		-- "$KBUILD_OUTPUT"/.config 2>/dev/null) || localversion=
 	localversion=${localversion%a}
 	[ -z "$localversion" ] || name=$name$localversion
 	modulename=$prefixdir/lib/modules/$name
@@ -862,16 +873,14 @@ CompileRemote() {
 	test -f "$KBUILD_OUTPUT/.config.old" && \
 		Ask "remove $KBUILD_OUTPUT/.config.old" && \
 		rm -f -- "$KBUILD_OUTPUT/.config.old"
-	prevtimeinfo=`date +%T`
-	! ReadLog || prevtimeinfo=$prevtimeinfo' '$prevtime
+	prevtimeinfo=
+	! ReadLog || prevtimeinfo=' '$prevtime
 	result=
 	what=
 	if Ask 'Compile both, kernel and modules'
 	then	CurrDate
 		comp_start=$currdate
-		extrainfo=$prevtimeinfo
-		MyMake
-		extrainfo=
+		MyMakeExtrainfo
 		CalcTimeDifference "$comp_start" && \
 			Info '' "Time for kernel+modules compilation: $result" ''
 		what='kernel+modules'
@@ -879,9 +888,7 @@ CompileRemote() {
 		Ask 'Compile kernel'  && {
 			CurrDate
 			comp_start=$currdate
-			extrainfo=$prevtimeinfo
-			MyMake bzImage
-			extrainfo=
+			MyMakeExtrainfo bzImage
 			CalcTimeDifference "$comp_start" && {
 				compiletime=$time_difference
 				Info '' "Time for kernel compilation: $result" ''
@@ -891,9 +898,7 @@ CompileRemote() {
 		Ask 'Compile modules' && {
 			CurrDate
 			modules_start=$currdate
-			extrainfo=$prevtimeinfo
-			MyMake modules
-			extrainfo=
+			MyMakeExtrainfo modules
 			CalcTimeDifference "$modules_start" && {
 				Info '' "Time for modules compilation: $result" ''
 				if [ -n "${what:++}" ]
