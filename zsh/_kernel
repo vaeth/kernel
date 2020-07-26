@@ -1,4 +1,5 @@
 #compdef kernel
+# SPDX-License-Identifier: BSD-3-Clause
 local curcontext="$curcontext" state state_descr line expl
 typeset -A opt_args
 _arguments -s -S -A '-*' : \

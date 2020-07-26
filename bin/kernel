@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-script_version=5.0
+# SPDX-License-Identifier: BSD-3-Clause
+script_version=6.2
 set -u
 set -f
 

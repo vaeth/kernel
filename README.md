@@ -2,6 +2,7 @@
 
 (C) Martin Väth <martin@mvath.de>
 This project is under the BSD license 2.0 (“3-clause BSD license”).
+SPDX-License-Identifier: BSD-3-Clause
 
 If you want to configure/compile your linux kernel as a user and install it
 as root, usually several standard commands should be entered.
