@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # SPDX-License-Identifier: BSD-3-Clause
-script_version=6.2
+script_version=6.3
 set -u
 set -f
 
@@ -704,6 +704,11 @@ CalcLinkerConfig() {
 	esac
 }
 
+AskUseLlvm() {
+	Ask 'Use llvm (LLVM=1 LLVM_IAS=1)' || return 1
+	PushMake 'LLVM=1' 'LLVM_IAS=1'
+}
+
 AskUseBfd() {
 	activeld=ld
 	if CalcLinkerConfig
@@ -839,7 +844,7 @@ CompileRemote() {
 	clr=$1
 
 	CalcCcache
-	AskUseBfd
+	AskUseLlvm || AskUseBfd
 	CalcMakeopts
 
 	Info "`gcc --version | head -n 1`"
