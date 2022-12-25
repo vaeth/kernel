@@ -523,7 +523,7 @@ PrepAndRemote() {
 			set -f
 			if [ $# -eq 0 ]
 			then	Info 'directory is already clean'
-			else	SafeRemove 50 "$@" || \
+			else	SafeRemove 90 "$@" || \
 					Fatal 'cleaning directory failed'
 			fi
 			clr=false
