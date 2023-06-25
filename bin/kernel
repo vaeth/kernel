@@ -120,6 +120,7 @@ Echon() {
 
 Warning() {
 	Echo "${0##*/}: warning: $*" >&2
+	return 1
 }
 
 Info() {
@@ -419,34 +420,36 @@ Ask() {
 	haveasked=:
 	Title '???'
 	askt="(Yes/No/Rest${schedule:+/Sched}/Quit) "
-	Echon "$*? $askt"
-	while Getkey
-	do	case $key in
-		[yY]*)
-			BackSpaceArg "$askt"
-			Echo 'Yes'
-			return 0;;
-		[nN]*)
-			BackSpaceArg "$askt"
-			Echo 'No'
-			return 1;;
-		[rR]*)
-			BackSpaceArg "$askt"
-			Echo 'Rest'
-			forceflag=:
-			return 0;;
-		[sS]*)
-			[ -n "$schedule" ] || continue
-			BackSpaceArg "$askt"
-			Echo 'Schedule + Rest'
-			forceflag=:
-			Schedule
-			return 0;;
-		[qQ]*)
-			BackSpaceArg "$askt"
-			Echo 'Quit'
-			Exit $quitstatus;;
-		esac
+	while :
+	do	Echon "$*? $askt"
+		while Getkey
+		do	case $key in
+			[yY]*)
+				BackSpaceArg "$askt"
+				Echo 'Yes'
+				return;;
+			[nN]*)
+				BackSpaceArg "$askt"
+				Echo 'No'
+				return 1;;
+			[rR]*)
+				BackSpaceArg "$askt"
+				Echo 'Rest'
+				forceflag=:
+				return;;
+			[sS]*)
+				[ -n "$schedule" ] || continue
+				BackSpaceArg "$askt"
+				Echo 'Schedule + Rest'
+				forceflag=:
+				Schedule || break
+				return;;
+			[qQ]*)
+				BackSpaceArg "$askt"
+				Echo 'Quit'
+				Exit $quitstatus;;
+			esac
+		done
 	done
 }
 
@@ -1113,7 +1116,7 @@ SafeToRemove() {
 		if [ $# -gt $1 ]
 		then	Warning "removing more than $1 files/dirs.
 This number is suspiciously large: skipping removal for safety reasons"
-			return 1
+			return
 		fi;;
 	esac
 	shift
@@ -1125,12 +1128,12 @@ This number is suspiciously large: skipping removal for safety reasons"
 			esac
 			Warning "not in an absolute subdirectory: $saveremove
 This is suspicious: skipping removal for safety reasons"
-			return 1
+			return
 		fi
 		if ! test -d "$saveremove"
 		then	Warning "unusual file type: $saveremove
 This is suspicious: skipping removal for safety reasons"
-			return 1
+			return
 		fi
 		case $saveremove in
 		/[!/]*/[!/]*/[!/]*)
@@ -1138,7 +1141,7 @@ This is suspicious: skipping removal for safety reasons"
 		esac
 		Warning "dir path length <3: $saveremove
 This number is suspiciously small: skipping for safety reasons"
-		return 1
+		return
 	done
 	return 0
 }
